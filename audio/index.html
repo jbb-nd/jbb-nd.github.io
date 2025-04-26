@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Analysis Application</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        .tool-container {
+            margin: 20px auto;
+            width: 80%;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+        .hidden {
+            display: none; /* Ensures hidden elements take up no space */
+        }
+        #tunerContainer {
+            font-size: 1.2em; /* Increase font size */
+            font-weight: bold; /* Make text bold */
+        }
+        h2 {
+            font-size: 1.0em; /* Decrease the font size */
+        }
+    </style>
+</head>
+<body>
+    <!-- <h1>Audio Analysis Application</h1> -->
+    <div>
+        <button id="startButton">Start</button>
+        <label>
+            <input type="checkbox" id="toggleTuner" checked>
+            Show Tuner
+        </label>
+        <label>
+            <input type="checkbox" id="toggleOscilloscope" checked>
+            Show Oscilloscope
+        </label>
+        <label>
+            <input type="checkbox" id="toggleSpectrumAnalyzer" checked>
+            Show Spectrum Analyzer
+        </label>
+    </div>
+    <div id="tunerContainer" class="tool-container">
+        <p>Peak Frequency: <span id="peakFrequency">0</span> Hz &nbsp;&nbsp; Period: <span id="peakPeriod">0</span> ms</p>
+        <!-- <p>Note: <span id="musicNote">--</span></p> -->
+        <table style="width: auto; margin: 0 auto; border-collapse: collapse; table-layout: auto;">
+            <tr>
+                <td style="text-align: right; padding: 0; width: 4ch;"> <!-- Right-justified -->
+                    <span id="flat"> </span> <!-- Flat note indicator -->
+                </td>
+                <td style="text-align: center; padding: 0; width: 3ch;"> <!-- Center-justified -->
+                    <span id="noteName">--</span> <!-- Note name goes here -->
+                </td>
+                <td style="text-align: left; padding: 0; width: 4ch;"> <!-- Left-justified -->
+                    <span id="sharp"> </span> <!-- Sharp note indicator -->
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="oscilloscopeContainer" class="tool-container">
+        <h2>Oscilloscope</h2>
+        <div><canvas id="oscilloscope" height="200px"></canvas></div>
+    
+        <div class="controls">
+            <label for="xZoom">X Zoom:</label>
+            <input type="range" id="xZoom" min="-2.00" max="0.75" value="-1.0" step="0.05">
+            <label for="yZoom">Y Zoom:</label>
+            <input type="range" id="yZoom" min="0" max="2" value="1" step="0.05">
+            <button id="cursorButton">Show Cursors</button>
+        </div>
+    </div>
+
+    <div id="spectrumAnalyzerContainer" class="tool-container">
+        <h2>Spectrum Analyzer</h2>
+        <div><canvas id="spectrumAnalyzer" height="200px"></canvas></div>
+    </div>    
+
+    <script>
+        const peakFrequencyDisplay = document.getElementById('peakFrequency');
+        const peakPeriodDisplay = document.getElementById('peakPeriod');
+        // const musicNoteDisplay = document.getElementById('musicNote');
+        const noteNameDisplay = document.getElementById('noteName');
+        const flatDisplay = document.getElementById('flat');
+        const sharpDisplay = document.getElementById('sharp');
+        const oscilloscopeCanvas = document.getElementById('oscilloscope');
+        const spectrumCanvas = document.getElementById('spectrumAnalyzer');
+        const xZoomSlider = document.getElementById('xZoom');
+        const yZoomSlider = document.getElementById('yZoom');
+        const startButton = document.getElementById('startButton');
+        const cursorButton = document.getElementById('cursorButton');
+        const tunerContainer = document.getElementById('tunerContainer');
+        const oscilloscopeContainer = document.getElementById('oscilloscopeContainer');
+        const spectrumAnalyzerContainer = document.getElementById('spectrumAnalyzerContainer');
+        const toggleTuner = document.getElementById('toggleTuner');
+        const toggleOscilloscope = document.getElementById('toggleOscilloscope');
+        const toggleSpectrumAnalyzer = document.getElementById('toggleSpectrumAnalyzer');
+
+        let audioContext;
+        let isRunning = false; // Flag to check if audio is running
+        let cursorVisible = false; // Flag to check if cursors are visible
+        let analyser, timeDomainData, frequencyData;
+        let oscilloscopeChart, spectrumChart;
+        let draggingCursor = null; // Variable to track which cursor is being dragged
+
+        console.log('Initializing charts...');
+        initializeCharts();
+
+        async function setupAudio() {
+            try {
+                console.log('Initializing AudioContext...');
+                // Create the AudioContext
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                console.log('Requesting microphone access...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // Verify that the stream is active
+                if (!stream.active) {
+                    throw new Error('Microphone stream is not active.');
+                }
+
+                console.log('Microphone access granted. Waiting for microphone to initialize...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                console.log('Creating MediaStreamSource...');
+                const source = audioContext.createMediaStreamSource(stream);
+
+                console.log('Creating AnalyserNode...');
+                analyser = audioContext.createAnalyser();
+
+                console.log('AnalyserNode inputs:', analyser.numberOfInputs);
+                console.log('AnalyserNode outputs:', analyser.numberOfOutputs);
+
+                analyser.fftSize = 8192; // Set FFT size for frequency analysis originally 2048
+                analyser.smoothingTimeConstant = 0.9; // Set smoothing time constant for better visualization
+                timeDomainData = new Float32Array(analyser.fftSize);
+                frequencyData = new Float32Array(analyser.frequencyBinCount);
+
+                console.log('Connecting source to analyser...');
+                source.connect(analyser);
+
+                console.log('Audio setup complete. Starting charts...');
+                startUpdatingCharts();
+            } catch (error) {
+                console.error('Error accessing microphone or initializing audio:', error);
+                alert('Microphone access is required for this application to work.');
+            }
+        }
+
+        function initializeCharts() {
+            try {
+                const oscilloscopeCtx = oscilloscopeCanvas.getContext('2d');
+                oscilloscopeChart = new Chart(oscilloscopeCtx, {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Oscilloscope',
+                            data: [],
+                            borderColor: 'blue',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.1 // Smooth the line
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        scales: {
+                            x: { 
+                                type: 'linear', 
+                                min: 0,
+                                max: 10,
+                                title: { display: true, text: 'Time (ms)' } 
+                            },
+                            y: {
+                                type: 'linear', 
+                                min: -0.1,
+                                max: 0.1,
+                                title: { display: true, text: 'Amplitude' }, 
+                                ticks: { display: false } 
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false // Hide the legend
+                            },
+                            zoom: {
+                                zoom: {
+                                    wheel: { enabled: false },
+                                    pinch: { enabled: false },
+                                    mode: 'xy'
+                                }
+                            },
+                            annotation: {
+                                annotations: {
+                                    // Vertical cursor 1
+                                    cursor1: {
+                                        type: 'line',
+                                        xMin: 2,
+                                        xMax: 2,
+                                        display: false,
+                                        borderColor: 'red',
+                                        borderWidth: 2,
+                                        label: {
+                                            content: 'Cursor 1: X = 2',
+                                            enabled: true,
+                                            display: false,
+                                            position: 'start',
+                                            backgroundColor: 'red'
+                                        }
+                                    },
+                                    // Vertical cursor 2
+                                    cursor2: {
+                                        type: 'line',
+                                        xMin: 8,
+                                        xMax: 8,
+                                        display: false,
+                                        borderColor: 'green',
+                                        borderWidth: 2,
+                                        label: {
+                                            content: 'Cursor 2: X = 8',
+                                            enabled: true,
+                                            display: false,
+                                            position: 'start',
+                                            backgroundColor: 'green'
+                                        }
+                                    },
+                                    // Horizontal range line
+                                    range: {
+                                        type: 'line',
+                                        xMin: 2,
+                                        xMax: 8,
+                                        yMin: 0,
+                                        yMax: 0,
+                                        display: false,
+                                        borderColor: 'orange',
+                                        borderWidth: 2,
+                                        label: {
+                                            content: '6.00 ms',
+                                            enabled: true,
+                                            display: true,
+                                            position: 'middle',
+                                            backgroundColor: 'orange'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                const spectrumCtx = spectrumCanvas.getContext('2d');
+                spectrumChart = new Chart(spectrumCtx, {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Spectrum',
+                            data: [],
+                            borderColor: 'green',
+                            borderWidth: 2,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        scales: {
+                            x: {
+                                type: 'logarithmic',
+                                min: 20,
+                                max: 20000,
+                                title: { display: true, text: 'Frequency (Hz)' }
+                            },
+                            y: { 
+                                type: 'linear', 
+                                title: { display: true, text: 'Amplitude' },
+                                ticks: { display: false }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false // Hide the legend
+                            }
+                        }
+                    }
+                });
+
+                console.log('Charts initialized successfully.');
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+                alert('An error occurred while initializing the charts.');
+            }
+        }
+
+        function startUpdatingCharts() {
+            if (!analyser || !oscilloscopeChart || !spectrumChart) {
+                console.warn('Required components not initialized. Retrying...');
+                setTimeout(startUpdatingCharts, 100);
+                return;
+            }
+
+            console.log('Starting chart updates...');
+            updateCharts();
+        }
+
+        function updateCharts() {
+            try {
+                // Update Oscilloscope
+                analyser.getFloatTimeDomainData(timeDomainData);
+
+                // Find the first zero crossing
+                let zeroCrossingIndex = 0;
+                for (let i = 1; i < timeDomainData.length; i++) {
+                    if (timeDomainData[i - 1] <= 0 && timeDomainData[i] > 0) {
+                        zeroCrossingIndex = i;
+                        break;
+                    }
+                }
+
+                // Adjust the data to start from the zero crossing
+                const adjustedTimeDomainData = timeDomainData.slice(zeroCrossingIndex);
+
+                // Calculate time in milliseconds for each sample
+                const sampleRate = audioContext.sampleRate;
+                const timeLabels = Array.from({ length: adjustedTimeDomainData.length }, (_, i) => (i / sampleRate) * 1000);
+
+                // Update the oscilloscope chart
+                oscilloscopeChart.data.labels = timeLabels;
+                oscilloscopeChart.data.datasets[0].data = Array.from(adjustedTimeDomainData);
+                oscilloscopeChart.update();
+
+                // Update Spectrum Analyzer
+                analyser.getFloatFrequencyData(frequencyData);
+                spectrumChart.data.labels = Array.from({ length: frequencyData.length }, (_, i) => i * (audioContext.sampleRate / 2) / frequencyData.length);
+                spectrumChart.data.datasets[0].data = Array.from(frequencyData);
+                spectrumChart.update();
+
+                // Find Peak Frequency with Parabolic Interpolation
+                let maxAmplitude = -Infinity;
+                let maxIndex = 0;
+                for (let i = 1; i < frequencyData.length - 1; i++) {
+                    if (frequencyData[i] > maxAmplitude) {
+                        maxAmplitude = frequencyData[i];
+                        maxIndex = i;
+                    }
+                }
+
+                // Apply parabolic interpolation to refine the peak index
+                let refinedIndex = maxIndex;
+                if (maxIndex > 0 && maxIndex < frequencyData.length - 1) {
+                    const x0 = frequencyData[maxIndex - 1];
+                    const x1 = frequencyData[maxIndex];
+                    const x2 = frequencyData[maxIndex + 1];
+                    refinedIndex = maxIndex + (x2 - x0) / (2 * (2 * x1 - x2 - x0));
+                }
+
+                const nyquist = audioContext.sampleRate / 2;
+                const peakFrequency = (refinedIndex / frequencyData.length) * nyquist;
+
+                // Smooth the peak frequency using a moving average
+                if (!updateCharts.frequencyBuffer) {
+                    updateCharts.frequencyBuffer = [];
+                }
+                const frequencyBuffer = updateCharts.frequencyBuffer;
+
+                // Add the new frequency to the buffer
+                frequencyBuffer.push(peakFrequency);
+                if (frequencyBuffer.length > 10) {
+                    frequencyBuffer.shift(); // Remove the oldest value if the buffer is full
+                }
+
+                // Calculate the moving average
+                const smoothedFrequency = frequencyBuffer.reduce((a, b) => a + b, 0) / frequencyBuffer.length;
+                const peakPeriod = (smoothedFrequency > 0) ? (1000 / smoothedFrequency) : 0; // Calculate period in milliseconds
+
+                // Update the peak frequency, period, and music note displays once per 0.5 seconds
+                if (!updateCharts.lastUpdateTime) {
+                    updateCharts.lastUpdateTime = performance.now();
+                }
+                const currentTime = performance.now();
+                if (currentTime - updateCharts.lastUpdateTime >= 500) {
+                    peakFrequencyDisplay.textContent = smoothedFrequency.toFixed(0);
+                    peakPeriodDisplay.textContent = peakPeriod.toFixed(2);
+
+                    const noteInfo = identifyNote(smoothedFrequency);
+                    const noteName = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][noteInfo.noteIndex];
+                    // musicNoteDisplay.textContent = `${noteName}${noteInfo.octave} (${noteInfo.centsOff} cents off)`;
+
+                    noteNameDisplay.textContent = noteName; // Update the note name display
+                    if (noteInfo.centsOff < -25) {
+                        flatDisplay.textContent = '- -'; // Flat note indicator
+                        sharpDisplay.textContent = ''; // Clear sharp indicator
+                    } else if (noteInfo.centsOff < -10) {
+                        flatDisplay.textContent = '-'; // Flat note indicator
+                        sharpDisplay.textContent = ''; // Clear sharp indicator
+                    } else if (noteInfo.centsOff < 10) {
+                        flatDisplay.textContent = ''; // In tune indicator
+                        sharpDisplay.textContent = ''; // Clear sharp indicator
+                    } else if (noteInfo.centsOff < 25) {
+                        flatDisplay.textContent = ''; // Clear flat indicator
+                        sharpDisplay.textContent = '+'; // Sharp note indicator
+                    } else {
+                        flatDisplay.textContent = ''; // Clear flat indicator
+                        sharpDisplay.textContent = '+ +'; // Sharp note indicator
+                    }
+
+                    updateCharts.lastUpdateTime = currentTime;
+                }
+
+                requestAnimationFrame(updateCharts);
+            } catch (error) {
+                console.error('Error updating charts:', error);
+            }
+        }
+
+        function identifyNote(frequency) {
+            const A0 = 27.5; // Frequency of A0
+            const SEMITONE_RATIO = Math.pow(2, 1 / 12);
+
+            // Calculate the number of semitones away from A4
+            const semitonesFromA0 = Math.round(12 * Math.log2(frequency / A0));
+
+            // Calculate the closest note
+            const noteIndex = (semitonesFromA0 + 9) % 12; // A0 is the 9th note in NOTES
+            const octave = Math.floor((semitonesFromA0 + 9) / 12);
+
+            // Calculate the exact frequency of the closest note
+            const closestNoteFrequency = A0 * Math.pow(SEMITONE_RATIO, semitonesFromA0);
+
+            // Calculate the cents difference
+            const centsOff = Math.round(1200 * Math.log2(frequency / closestNoteFrequency));
+
+            return { noteIndex, octave, centsOff };
+        }
+
+        // Toggle visibility of tools
+        toggleTuner.addEventListener('change', (event) => {
+            const tunerVisible = event.target.checked;
+            tunerContainer.classList.toggle('hidden', !tunerVisible);
+        });
+
+        toggleOscilloscope.addEventListener('change', (event) => {
+            const oscilloscopeVisible = event.target.checked;
+            oscilloscopeContainer.classList.toggle('hidden', !oscilloscopeVisible);
+        });
+        
+        toggleSpectrumAnalyzer.addEventListener('change', (event) => {
+            const spectrumAnalyzerVisible = event.target.checked;
+            spectrumAnalyzerContainer.classList.toggle('hidden', !spectrumAnalyzerVisible);
+        });
+
+        // Zoom Controls
+        xZoomSlider.addEventListener('input', () => {
+            const maxVisibleMilliseconds = 10 ** (-xZoomSlider.value); // Calculate max visible milliseconds based on slider value
+            
+            // Ensure x.max is valid
+            oscilloscopeChart.options.scales.x.max = Math.min(maxVisibleMilliseconds, oscilloscopeChart.data.labels[oscilloscopeChart.data.labels.length - 1]);
+            oscilloscopeChart.update();
+        });
+
+        yZoomSlider.addEventListener('input', () => {
+            const zoomFactor = yZoomSlider.value; // Slider value (1 to 100)
+            const amplitudeRange = 10 ** (-yZoomSlider.value); // Calculate amplitude range based on slider value
+
+            // Ensure y.min and y.max are valid
+            oscilloscopeChart.options.scales.y.min = -amplitudeRange;
+            oscilloscopeChart.options.scales.y.max = amplitudeRange;
+            oscilloscopeChart.update();
+        });
+
+        // Attach event listener to the start button
+        startButton.addEventListener('click', async () => {
+            console.log('User gesture detected. Starting audio setup...');
+            if (!audioContext) {
+                setupAudio();
+                isRunning = true; // Set the flag to true when audio starts
+                startButton.textContent = 'Pause';
+            } else if (isRunning) {
+                // Pause the audio analysis
+                console.log('Pausing audio analysis...');
+                await audioContext.suspend(); // Suspend the AudioContext
+                isRunning = false;
+                startButton.textContent = 'Start'; // Update button text
+            } else {
+                // Resume the audio analysis
+                console.log('Resuming audio analysis...');
+                console.log('AnalyserNode inputs:', analyser.numberOfInputs);
+                console.log('AnalyserNode outputs:', analyser.numberOfOutputs);
+                await audioContext.resume(); // Resume the AudioContext
+
+                // Reconnect the MediaStreamSource to the AnalyserNode
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+
+                console.log('AnalyserNode inputs:', analyser.numberOfInputs);
+                console.log('AnalyserNode outputs:', analyser.numberOfOutputs);
+
+                isRunning = true;
+                startButton.textContent = 'Pause';
+            }
+        });
+
+        // Attach event listener to the cursor button
+        cursorButton.addEventListener('click', () => {
+            const xMax = oscilloscopeChart.options.scales.x.max;
+            const cursor1Annotation = oscilloscopeChart.options.plugins.annotation.annotations.cursor1;
+            const cursor2Annotation = oscilloscopeChart.options.plugins.annotation.annotations.cursor2;
+            const rangeAnnotation = oscilloscopeChart.options.plugins.annotation.annotations.range;
+            cursor1Annotation.xMin = xMax * 0.2; // Set cursor1 to 20% of xMax
+            cursor1Annotation.xMax = xMax * 0.2; // Set cursor1 to 20% of xMax
+            cursor2Annotation.xMin = xMax * 0.8; // Set cursor2 to 80% of xMax
+            cursor2Annotation.xMax = xMax * 0.8; // Set cursor2 to 80% of xMax
+            rangeAnnotation.xMin = xMax * 0.2; // Set range line to start at cursor1
+            rangeAnnotation.xMax = xMax * 0.8; // Set range line to end at cursor2
+            if (!cursorVisible) {
+                // Show cursors and range line
+                cursor1Annotation.display = true;
+                cursor2Annotation.display = true;
+                rangeAnnotation.display = true;
+                cursorButton.textContent = 'Hide Cursors';
+                cursorVisible = true;
+            } else {
+                // Hide cursors and range line
+                cursor1Annotation.display = false;
+                cursor2Annotation.display = false;
+                rangeAnnotation.display = false;
+                cursorButton.textContent = 'Show Cursors';
+                cursorVisible = false;
+            }
+
+            oscilloscopeChart.update();
+        });
+
+        // Handle cursor dragging
+        oscilloscopeCanvas.addEventListener('mousedown', (event) => {
+            const xValue = oscilloscopeChart.scales.x.getValueForPixel(event.offsetX);
+            const cursor1X = oscilloscopeChart.options.plugins.annotation.annotations.cursor1.xMin;
+            const cursor2X = oscilloscopeChart.options.plugins.annotation.annotations.cursor2.xMin;
+
+            if (Math.abs(xValue - cursor1X) < 0.1) {
+                draggingCursor = 'cursor1';
+            } else if (Math.abs(xValue - cursor2X) < 0.1) {
+                draggingCursor = 'cursor2';
+            }
+        });
+
+        oscilloscopeCanvas.addEventListener('mousemove', (event) => {
+            if (draggingCursor) {
+                const xValue = oscilloscopeChart.scales.x.getValueForPixel(event.offsetX);
+                const cursorAnnotation = oscilloscopeChart.options.plugins.annotation.annotations[draggingCursor];
+                // Update the position of the dragged cursor
+                cursorAnnotation.xMin = xValue;
+                cursorAnnotation.xMax = xValue;
+                cursorAnnotation.label.content = 
+                    `${draggingCursor.charAt(0).toUpperCase() + draggingCursor.slice(1)}: X = ${xValue.toFixed(2)}`;
+                
+                // Update the range line
+                const rangeAnnotation = oscilloscopeChart.options.plugins.annotation.annotations.range;
+                if (draggingCursor === 'cursor1') {
+                    rangeAnnotation.xMin = xValue;
+                } else if (draggingCursor === 'cursor2') {
+                    rangeAnnotation.xMax = xValue;
+                }
+                rangeAnnotation.label.content = `${Math.abs(rangeAnnotation.xMin - rangeAnnotation.xMax).toFixed(2)} ms`;
+
+                oscilloscopeChart.update();
+            }
+        });
+
+        oscilloscopeCanvas.addEventListener('mouseup', () => {
+            draggingCursor = null; // Reset dragging cursor on mouse up
+        });
+        
+        oscilloscopeCanvas.addEventListener('mouseleave', () => {
+            draggingCursor = null; // Reset dragging cursor on mouse leave
+        });
+
+    </script>
+</body>
+</html>
