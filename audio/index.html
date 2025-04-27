@@ -452,16 +452,19 @@
 
         // Toggle visibility of tools
         toggleTuner.addEventListener('change', (event) => {
+            // event.preventDefault();
             const tunerVisible = event.target.checked;
             tunerContainer.classList.toggle('hidden', !tunerVisible);
         });
 
         toggleOscilloscope.addEventListener('change', (event) => {
+            // event.preventDefault();
             const oscilloscopeVisible = event.target.checked;
             oscilloscopeContainer.classList.toggle('hidden', !oscilloscopeVisible);
         });
         
         toggleSpectrumAnalyzer.addEventListener('change', (event) => {
+            // event.preventDefault();
             const spectrumAnalyzerVisible = event.target.checked;
             spectrumAnalyzerContainer.classList.toggle('hidden', !spectrumAnalyzerVisible);
         });
@@ -486,7 +489,8 @@
         });
 
         // Attach event listener to the start button
-        startButton.addEventListener('click', async () => {
+        startButton.addEventListener('click', async (event) => {
+            // event.preventDefault();
             console.log('User gesture detected. Starting audio setup...');
             if (!audioContext) {
                 setupAudio();
@@ -497,7 +501,7 @@
                 console.log('Pausing audio analysis...');
                 await audioContext.suspend(); // Suspend the AudioContext
                 isRunning = false;
-                startButton.textContent = 'Start'; // Update button text
+                startButton.textContent = 'Run'; // Update button text
             } else {
                 // Resume the audio analysis
                 console.log('Resuming audio analysis...');
@@ -519,7 +523,8 @@
         });
 
         // Attach event listener to the cursor button
-        cursorButton.addEventListener('click', () => {
+        cursorButton.addEventListener('click', (event) => {
+            // event.preventDefault();
             const xMax = oscilloscopeChart.options.scales.x.max;
             const cursor1Annotation = oscilloscopeChart.options.plugins.annotation.annotations.cursor1;
             const cursor2Annotation = oscilloscopeChart.options.plugins.annotation.annotations.cursor2;
@@ -551,6 +556,7 @@
 
         // Handle cursor dragging
         oscilloscopeCanvas.addEventListener('mousedown', (event) => {
+            event.preventDefault();
             const xValue = oscilloscopeChart.scales.x.getValueForPixel(event.offsetX);
             const cursor1X = oscilloscopeChart.options.plugins.annotation.annotations.cursor1.xMin;
             const cursor2X = oscilloscopeChart.options.plugins.annotation.annotations.cursor2.xMin;
@@ -563,6 +569,7 @@
         });
 
         oscilloscopeCanvas.addEventListener('mousemove', (event) => {
+            event.preventDefault();
             if (draggingCursor) {
                 const xValue = oscilloscopeChart.scales.x.getValueForPixel(event.offsetX);
                 const cursorAnnotation = oscilloscopeChart.options.plugins.annotation.annotations[draggingCursor];
@@ -585,12 +592,62 @@
             }
         });
 
-        oscilloscopeCanvas.addEventListener('mouseup', () => {
+        oscilloscopeCanvas.addEventListener('mouseup', (event) => {
+            event.preventDefault();
             draggingCursor = null; // Reset dragging cursor on mouse up
         });
         
-        oscilloscopeCanvas.addEventListener('mouseleave', () => {
+        oscilloscopeCanvas.addEventListener('mouseleave', (event) => {
+            event.preventDefault();
             draggingCursor = null; // Reset dragging cursor on mouse leave
+        });
+
+        // Handle touch start for cursor dragging
+        oscilloscopeCanvas.addEventListener('touchstart', (event) => {
+            event.preventDefault();
+            const touch = event.touches[0]; // Get the first touch point
+            const xValue = oscilloscopeChart.scales.x.getValueForPixel(touch.clientX - oscilloscopeCanvas.getBoundingClientRect().left);
+            const cursor1X = oscilloscopeChart.options.plugins.annotation.annotations.cursor1.xMin;
+            const cursor2X = oscilloscopeChart.options.plugins.annotation.annotations.cursor2.xMin;
+
+            if (Math.abs(xValue - cursor1X) < 0.1) {
+                draggingCursor = 'cursor1';
+            } else if (Math.abs(xValue - cursor2X) < 0.1) {
+                draggingCursor = 'cursor2';
+            }
+        });
+
+        // Handle touch move for cursor dragging
+        oscilloscopeCanvas.addEventListener('touchmove', (event) => {
+            event.preventDefault();
+            if (draggingCursor) {
+                const touch = event.touches[0]; // Get the first touch point
+                const xValue = oscilloscopeChart.scales.x.getValueForPixel(touch.clientX - oscilloscopeCanvas.getBoundingClientRect().left);
+                const cursorAnnotation = oscilloscopeChart.options.plugins.annotation.annotations[draggingCursor];
+
+                // Update the position of the dragged cursor
+                cursorAnnotation.xMin = xValue;
+                cursorAnnotation.xMax = xValue;
+                cursorAnnotation.label.content = 
+                    `${draggingCursor.charAt(0).toUpperCase() + draggingCursor.slice(1)}: X = ${xValue.toFixed(2)}`;
+
+                // Update the range line
+                const rangeAnnotation = oscilloscopeChart.options.plugins.annotation.annotations.range;
+                if (draggingCursor === 'cursor1') {
+                    rangeAnnotation.xMin = xValue;
+                } else if (draggingCursor === 'cursor2') {
+                    rangeAnnotation.xMax = xValue;
+                }
+                rangeAnnotation.label.content = `${Math.abs(rangeAnnotation.xMin - rangeAnnotation.xMax).toFixed(2)} ms`;
+
+                oscilloscopeChart.update();
+            }
+        });
+
+        // Handle touch end to stop dragging
+        oscilloscopeCanvas.addEventListener('touchend', (event) => {
+            event.preventDefault();
+            draggingCursor = null; // Reset dragging cursor on touch end
         });
 
     </script>
