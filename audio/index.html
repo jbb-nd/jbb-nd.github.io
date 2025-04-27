@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Analysis Application</title>
+    <title>Making Waves Audio Analysis</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
@@ -33,13 +33,21 @@
         h2 {
             font-size: 1.0em; /* Decrease the font size */
         }
+        #logo {
+            position: absolute;
+            top: 10px; /* Adjust as needed */
+            left: 10px; /* Adjust as needed */
+            width: 200px; /* Increase the width to make the logo bigger */
+            height: auto; /* Maintain aspect ratio */
+            z-index: 1000; /* Ensure it appears above other elements */
+        }
         /* canvas { */
             /* touch-action: none; */ /*Disable default touch behaviors */
         /* } */
     </style>
 </head>
 <body>
-    <!-- <h1>Audio Analysis Application</h1> -->
+    <img src="making-waves-logo.png" alt="Making Waves Logo" id="logo">
     <div>
         <button id="startButton">Start</button>
         <label>
@@ -656,3 +664,4 @@
     </script>
 </body>
 </html>
+``` 
