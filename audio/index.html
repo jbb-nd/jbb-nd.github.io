@@ -38,12 +38,19 @@
             font-size: 1.0em; /* Decrease the font size */
         }
         #logo {
-            position: absolute;
-            top: 10px; /* Adjust as needed */
-            left: 10px; /* Adjust as needed */
-            width: 100px; /* Increase the width to make the logo bigger */
-            height: auto; /* Maintain aspect ratio */
-            z-index: 1000; /* Ensure it appears above other elements */
+            display: block;
+            width: 200px; /* Changed from 100px to 200px */
+            height: auto;
+            margin: 0 auto 20px auto; /* Center horizontally and add bottom margin */
+        }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .button-container {
+            text-align: center;
         }
         /* canvas { */
             /* touch-action: none; */ /*Disable default touch behaviors */
@@ -51,7 +58,12 @@
     </style>
 </head>
 <body>
-    <div>
+    <div class="logo-container">
+        <a href="https://makingwaveseducation.com" target="_blank">
+            <img src="making-waves-logo.png" alt="Making Waves Logo" id="logo">
+        </a>
+    </div>
+    <div class="button-container">
         <button id="startButton">Start</button>
         <label>
             <input type="checkbox" id="toggleTuner" checked>
@@ -66,7 +78,6 @@
             Show Spectrum Analyzer
         </label>
     </div>
-    <!-- <img src="making-waves-logo.png" alt="Making Waves Logo" id="logo"> -->
     <div id="tunerContainer" class="tool-container">
         <p>Peak Frequency: <span id="peakFrequency">0</span> Hz &nbsp;&nbsp; Period: <span id="peakPeriod">0</span> ms</p>
         <!-- <p>Note: <span id="musicNote">--</span></p> -->
