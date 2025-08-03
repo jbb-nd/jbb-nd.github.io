@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Albacore Microprocessor Simulator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .highlighted-line {
+            background-color: #ffeb3b !important;
+            color: #000;
+        }
+        
+        .source-input {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 400px;
+            overflow-x: auto;
+            overflow-y: auto;
+            white-space: nowrap;
+            resize: vertical;
+            min-height: 200px;
+            max-height: 800px;
+        }
+        
+        .data-labels-display {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            height: 250px;
+            overflow-y: auto;
+            resize: vertical;
+            min-height: 100px;
+            max-height: 500px;
+        }
+        
+        /* Resizable display containers */
+        .resizable-display {
+            resize: vertical;
+            min-height: 100px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .code-display {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            resize: vertical;
+            min-height: 150px;
+            max-height: 600px;
+        }
+        
+        .memory-display {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            white-space: pre;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            resize: vertical;
+            min-height: 100px;
+            max-height: 500px;
+        }
+        
+        .register-display {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            white-space: pre;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            resize: vertical;
+            min-height: 100px;
+            max-height: 400px;
+        }
+        
+        .console-display {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background-color: #000;
+            color: #00ff00;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            overflow-x: auto;
+            white-space: nowrap;
+            resize: vertical;
+            min-height: 100px;
+            max-height: 400px;
+        }
+        
+        /* Toolbar styles */
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn-group .btn {
+            border-radius: 0.25rem;
+        }
+        
+        .btn-group:not(:last-child) {
+            margin-right: 1rem;
+        }
+        
+        /* Resize handle styling for vertical resize */
+        .source-input::-webkit-resizer,
+        .code-display::-webkit-resizer,
+        .memory-display::-webkit-resizer,
+        .register-display::-webkit-resizer,
+        .console-display::-webkit-resizer,
+        .data-labels-display::-webkit-resizer {
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%23333' stroke-width='2' stroke-dasharray='6%2c4' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+            background-size: 8px 8px;
+            background-repeat: no-repeat;
+            background-position: bottom right;
+        }
+        
+        /* Card body adjustments for better resize behavior */
+        .card-body {
+            overflow: hidden;
+        }
+        
+        .card-body.p-0 {
+            padding: 0 !important;
+        }
+        
+        /* Resizable layout styles */
+        .resizable-container {
+            display: flex;
+            width: 100%;
+            gap: 0;
+        }
+        
+        .resizable-column {
+            flex: 1;
+            min-width: 250px;
+            padding: 0 0.5rem;
+        }
+        
+        .resize-handle {
+            width: 5px;
+            background-color: #dee2e6;
+            cursor: col-resize;
+            position: relative;
+            flex-shrink: 0;
+            transition: background-color 0.2s ease;
+        }
+        
+        .resize-handle:hover {
+            background-color: #007bff;
+        }
+        
+        .resize-handle.dragging {
+            background-color: #007bff;
+        }
+        
+        .resize-handle::before {
+            content: '';
+            position: absolute;
+            left: -2px;
+            right: -2px;
+            top: 0;
+            bottom: 0;
+            cursor: col-resize;
+        }
+        
+        /* Help modal styles */
+        .help-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        .help-content h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .help-content h2 {
+            color: #34495e;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ecf0f1;
+            padding-bottom: 5px;
+        }
+        
+        .help-content h3 {
+            color: #2c3e50;
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+        
+        .help-content h4, .help-content h5, .help-content h6 {
+            color: #2c3e50;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+        
+        .help-content p {
+            margin-bottom: 15px;
+        }
+        
+        .help-content ul, .help-content ol {
+            margin-bottom: 15px;
+            padding-left: 20px;
+        }
+        
+        .help-content li {
+            margin-bottom: 5px;
+        }
+        
+        .help-content code {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 3px;
+            padding: 2px 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #e83e8c;
+        }
+        
+        .help-content pre {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+        
+        .help-content pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            color: #333;
+        }
+        
+        .help-content blockquote {
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin: 15px 0;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        
+        .help-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        
+        .help-content th, .help-content td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .help-content th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        
+        .help-content strong, .help-content b {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        .help-content em, .help-content i {
+            color: #7f8c8d;
+        }
+        
+        .help-content .checkmark {
+            color: #27ae60;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <h1 class="text-center my-4">Albacore Microprocessor Simulator</h1>
+        
+        <!-- Toolbar -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom mb-3">
+            <div class="container-fluid">
+                <!-- File Operations -->
+                <div class="btn-group me-3" role="group" aria-label="File Operations">
+                    <button id="openFileBtn" class="btn btn-outline-secondary btn-sm" title="Open Assembly File (Ctrl+O)">
+                        📁 Open
+                    </button>
+                    <button id="saveSourceBtn" class="btn btn-outline-secondary btn-sm" title="Save Assembly Source (Ctrl+S)">
+                        💾 Save Source
+                    </button>
+                    <button id="saveMemoryBtn" class="btn btn-outline-secondary btn-sm" title="Save Assembled Program to .mem file">
+                        🗃️ Save Assembled
+                    </button>
+                </div>
+                
+                <!-- Compilation -->
+                <div class="btn-group me-3" role="group" aria-label="Compilation">
+                    <button id="compileBtn" class="btn btn-primary btn-sm" title="Compile Assembly Code (F9)">
+                        🔧 Compile
+                    </button>
+                    <button id="initializeBtn" class="btn btn-outline-secondary btn-sm" title="Initialize/Clear All (Ctrl+I)">
+                        🔄 Initialize
+                    </button>
+                </div>
+                
+                <!-- Execution Controls -->
+                <div class="btn-group me-3" role="group" aria-label="Execution">
+                    <button id="stepBtn" class="btn btn-success btn-sm" disabled title="Single Step (F10)">
+                        ⏭️ Step
+                    </button>
+                    <button id="runBtn" class="btn btn-warning btn-sm" disabled title="Run to End (F5)">
+                        ▶️ Run
+                    </button>
+                    <button id="resetBtn" class="btn btn-danger btn-sm" disabled title="Reset Execution (Ctrl+R)">
+                        🔄 Reset
+                    </button>
+                </div>
+                
+                <!-- Status Display -->
+                <div class="d-flex align-items-center me-auto">
+                    <small class="text-muted me-3">PC: <span id="pcDisplay" class="badge bg-secondary">0x0000</span></small>
+                    <small class="text-muted">Status: <span id="statusDisplay" class="badge bg-info">Not compiled</span></small>
+                </div>
+                
+                <!-- Help -->
+                <div class="btn-group" role="group" aria-label="Help">
+                    <button id="helpBtn" class="btn btn-info btn-sm" title="Show Help">
+                        📖 Help
+                    </button>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="resizable-container">
+            <!-- Left Column: Source Code Input -->
+            <div class="resizable-column" id="column1">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Assembly Source Code</h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="sourceCode" class="form-control source-input" placeholder="Enter assembly code here...">
+.text
+main:
+    ldi r1, 10
+    ldi r2, 5
+    add r3, r1, r2
+    quit
+
+.data
+result: .word 0</textarea>
+                    </div>
+                </div>
+                
+                <!-- Console -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6>Console</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="console" class="console-display"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Resize Handle 1 -->
+            <div class="resize-handle" data-target="column1"></div>
+            
+            <!-- Middle Column: Assembled Program and Memory -->
+            <div class="resizable-column" id="column2">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Assembled Program</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="assembledProgram" class="code-display"></div>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6>Memory Contents</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="memoryDisplay" class="memory-display"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Resize Handle 2 -->
+            <div class="resize-handle" data-target="column2"></div>
+            
+            <!-- Right Column: Registers and Data -->
+            <div class="resizable-column" id="column3">
+                <!-- Registers -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6>Registers</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="registersDisplay" class="register-display"></div>
+                    </div>
+                </div>
+                
+                <!-- Data Labels -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6>Data Labels</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="dataLabelsDisplay" class="data-labels-display"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="helpModalLabel">📖 Albacore Simulator Help</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="helpContent" class="help-content">
+                        <!-- README content will be loaded here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="simulator.js"></script>
+    <script>
+        // Column resize functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            const resizeHandles = document.querySelectorAll('.resize-handle');
+            const container = document.querySelector('.resizable-container');
+            let isResizing = false;
+            let currentHandle = null;
+            let startX = 0;
+            let startWidths = [];
+
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', initResize);
+            });
+
+            function initResize(e) {
+                e.preventDefault();
+                isResizing = true;
+                currentHandle = e.target;
+                startX = e.clientX;
+                
+                // Get current column widths
+                const columns = document.querySelectorAll('.resizable-column');
+                startWidths = Array.from(columns).map(col => col.offsetWidth);
+                
+                currentHandle.classList.add('dragging');
+                document.addEventListener('mousemove', doResize);
+                document.addEventListener('mouseup', stopResize);
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+            }
+
+            function doResize(e) {
+                if (!isResizing) return;
+                
+                const deltaX = e.clientX - startX;
+                const columns = document.querySelectorAll('.resizable-column');
+                
+                // Determine which columns to resize based on which handle is being dragged
+                const targetColumnIndex = parseInt(currentHandle.dataset.target.replace('column', '')) - 1;
+                const nextColumnIndex = targetColumnIndex + 1;
+                
+                if (nextColumnIndex < columns.length) {
+                    // Calculate new widths
+                    let newLeftWidth = startWidths[targetColumnIndex] + deltaX;
+                    let newRightWidth = startWidths[nextColumnIndex] - deltaX;
+                    
+                    // Enforce minimum widths
+                    const minWidth = 250;
+                    newLeftWidth = Math.max(newLeftWidth, minWidth);
+                    newRightWidth = Math.max(newRightWidth, minWidth);
+                    
+                    // Adjust if we hit minimum constraints
+                    if (newLeftWidth === minWidth && deltaX < 0) {
+                        // Can't shrink left column further
+                        return;
+                    }
+                    if (newRightWidth === minWidth && deltaX > 0) {
+                        // Can't shrink right column further
+                        return;
+                    }
+                    
+                    // Set explicit widths instead of flex ratios to avoid third column interference
+                    columns[targetColumnIndex].style.flex = 'none';
+                    columns[nextColumnIndex].style.flex = 'none';
+                    columns[targetColumnIndex].style.width = `${newLeftWidth}px`;
+                    columns[nextColumnIndex].style.width = `${newRightWidth}px`;
+                    
+                    // Keep the third column flexible if it exists and isn't being resized
+                    if (columns.length > 2) {
+                        for (let i = 0; i < columns.length; i++) {
+                            if (i !== targetColumnIndex && i !== nextColumnIndex) {
+                                columns[i].style.flex = '1';
+                                columns[i].style.width = '';
+                            }
+                        }
+                    }
+                }
+            }
+
+            function stopResize() {
+                if (!isResizing) return;
+                
+                isResizing = false;
+                currentHandle.classList.remove('dragging');
+                currentHandle = null;
+                
+                document.removeEventListener('mousemove', doResize);
+                document.removeEventListener('mouseup', stopResize);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+
+            // Prevent text selection during resize
+            document.addEventListener('selectstart', (e) => {
+                if (isResizing) e.preventDefault();
+            });
+        });
+    </script>
+</body>
+</html>
