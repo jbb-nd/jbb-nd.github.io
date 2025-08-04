@@ -21,6 +21,22 @@
             resize: vertical;
             min-height: 200px;
             max-height: 800px;
+            line-height: 1.2;
+        }
+        
+        .source-display {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            height: 250px;
+            overflow-y: auto;
+            resize: vertical;
+            min-height: 200px;
+            max-height: 800px;
+            line-height: 1.2;
         }
         
         .data-labels-display {
@@ -353,7 +369,7 @@
                         <h5>Assembly Source Code</h5>
                     </div>
                     <div class="card-body">
-                        <textarea id="sourceCode" class="form-control source-input" placeholder="Enter assembly code here...">
+                        <textarea id="sourceCode" class="form-control source-input" placeholder="Enter assembly code here..." style="display: none;">
 .text
 main:
     ldi r1, 10
@@ -363,6 +379,16 @@ main:
 
 .data
 result: .word 0</textarea>
+                        <div id="sourceDisplay" class="source-display" contenteditable="true" spellcheck="false">
+.text
+main:
+    ldi r1, 10
+    ldi r2, 5
+    add r3, r1, r2
+    quit
+
+.data
+result: .word 0</div>
                     </div>
                 </div>
                 

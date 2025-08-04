@@ -57,6 +57,9 @@ class AlbacoreSimulator {
         console.log('Compile button:', document.getElementById('compileBtn'));
         console.log('Step button:', document.getElementById('stepBtn'));
         
+        // Set up source code synchronization
+        this.setupSourceCodeSync();
+        
         document.getElementById('compileBtn').addEventListener('click', () => {
             console.log('Compile button clicked');
             this.compile();
@@ -100,24 +103,24 @@ class AlbacoreSimulator {
             // Handle Ctrl+O and Ctrl+S globally to prevent browser defaults
             if (isModifier && event.key === 'o') {
                 event.preventDefault();
-                // Only trigger if we're in the source code textarea or not in any input
-                if (event.target.id === 'sourceCode' || !event.target.matches('input, textarea')) {
+                // Only trigger if we're in the source code display or not in any input
+                if (event.target.id === 'sourceDisplay' || !event.target.matches('input, textarea')) {
                     this.openFile();
                     this.log('Open file triggered by Ctrl/Cmd+O');
                 }
                 return;
             } else if (isModifier && event.key === 's') {
                 event.preventDefault();
-                // Only trigger if we're in the source code textarea or not in any input
-                if (event.target.id === 'sourceCode' || !event.target.matches('input, textarea')) {
+                // Only trigger if we're in the source code display or not in any input
+                if (event.target.id === 'sourceDisplay' || !event.target.matches('input, textarea')) {
                     this.saveFile();
                     this.log('Save file triggered by Ctrl/Cmd+S');
                 }
                 return;
             }
             
-            // Only handle other shortcuts when not typing in the source code textarea
-            if (event.target.id === 'sourceCode') return;
+            // Only handle other shortcuts when not typing in the source code display
+            if (event.target.id === 'sourceDisplay') return;
             
             if (event.key === 'F9' || (isModifier && event.key === 'F9')) {
                 event.preventDefault();
@@ -145,7 +148,7 @@ class AlbacoreSimulator {
         });
         
         // Add textarea-specific shortcuts for the source code editor
-        document.getElementById('sourceCode').addEventListener('keydown', (event) => {
+        document.getElementById('sourceDisplay').addEventListener('keydown', (event) => {
             const isModifier = event.ctrlKey || event.metaKey;
             
             if (isModifier && event.key === '/') {
@@ -165,6 +168,40 @@ class AlbacoreSimulator {
         this.updateDisplay();
     }
     
+    setupSourceCodeSync() {
+        const sourceDisplay = document.getElementById('sourceDisplay');
+        const sourceTextarea = document.getElementById('sourceCode');
+        
+        console.log('Setting up source code sync');
+        console.log('sourceDisplay:', sourceDisplay);
+        console.log('sourceTextarea:', sourceTextarea);
+        
+        // Keep textarea and display in sync
+        sourceDisplay.addEventListener('input', () => {
+            sourceTextarea.value = sourceDisplay.innerText;
+            console.log('Source display changed, updated textarea');
+        });
+        
+        // Initialize with textarea content
+        sourceDisplay.innerText = sourceTextarea.value;
+        console.log('Initialized source display with textarea content');
+        
+        // Also initialize the display with the escaped HTML version (no highlighting yet)
+        this.updateSourceDisplay();
+    }
+    
+    updateSourceDisplay() {
+        const sourceDisplay = document.getElementById('sourceDisplay');
+        const sourceCode = this.getSourceCode();
+        sourceDisplay.innerHTML = this.escapeHtml(sourceCode);
+        console.log('Updated source display with escaped HTML');
+    }
+    
+    getSourceCode() {
+        // Get source code from the display div
+        return document.getElementById('sourceDisplay').innerText;
+    }
+    
     log(message, isError = false) {
         const console = document.getElementById('console');
         const timestamp = new Date().toLocaleTimeString();
@@ -174,128 +211,81 @@ class AlbacoreSimulator {
     }
     
     toggleComment() {
-        const textarea = document.getElementById('sourceCode');
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        
-        // Find the start and end of the lines that contain the selection
-        const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-        const lineEndIndex = text.indexOf('\n', end - 1);
-        const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex;
-        
-        // Get the selected lines
-        const beforeSelection = text.substring(0, lineStart);
-        const selectedText = text.substring(lineStart, lineEnd);
-        const afterSelection = text.substring(lineEnd);
-        
-        // Split into individual lines
-        const lines = selectedText.split('\n');
-        
-        // Check if all non-empty lines are commented
-        const nonEmptyLines = lines.filter(line => line.trim().length > 0);
-        const allCommented = nonEmptyLines.length > 0 && nonEmptyLines.every(line => {
-            const trimmed = line.trim();
-            return trimmed.startsWith('//');
-        });
-        
-        // Toggle comments on each line
-        const toggledLines = lines.map(line => {
-            const trimmed = line.trim();
-            
-            if (trimmed.length === 0) {
-                // Leave empty lines unchanged
-                return line;
-            }
-            
-            if (allCommented) {
-                // Uncomment: remove first occurrence of '//' and optional space
-                return line.replace(/^(\s*)\/\/\s?/, '$1');
-            } else {
-                // Comment: add '//' after leading whitespace
-                const leadingWhitespace = line.match(/^(\s*)/)[1];
-                const restOfLine = line.substring(leadingWhitespace.length);
-                return leadingWhitespace + '// ' + restOfLine;
-            }
-        });
-        
-        // Calculate the new text and cursor positions
-        const newSelectedText = toggledLines.join('\n');
-        const newText = beforeSelection + newSelectedText + afterSelection;
-        
-        // Calculate new cursor positions
-        const lengthDiff = newSelectedText.length - selectedText.length;
-        const newStart = start;
-        const newEnd = end + lengthDiff;
-        
-        // Update the textarea
-        textarea.value = newText;
-        textarea.setSelectionRange(newStart, newEnd);
-        textarea.focus();
+        // For now, let's disable the complex editing functions with the display div
+        // and just update the content after editing
+        this.log('Comment toggle - please edit the source code directly');
     }
     
     insertTab() {
-        const textarea = document.getElementById('sourceCode');
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        
-        // Insert 4 spaces at the cursor position
-        const spaces = '    '; // 4 spaces
-        const newText = text.substring(0, start) + spaces + text.substring(end);
-        
-        // Update the textarea
-        textarea.value = newText;
-        
-        // Move cursor to after the inserted spaces
-        const newCursorPos = start + spaces.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
-        textarea.focus();
+        // Insert 4 spaces at cursor position in contenteditable div
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const textNode = document.createTextNode('    '); // 4 spaces
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.setEndAfter(textNode);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            // Update the hidden textarea
+            document.getElementById('sourceCode').value = document.getElementById('sourceDisplay').innerText;
+        }
     }
     
     autoIndent() {
-        const textarea = document.getElementById('sourceCode');
-        const start = textarea.selectionStart;
-        const text = textarea.value;
-        
-        // Find the start of the current line
-        const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-        const currentLine = text.substring(lineStart, start);
-        
-        // Calculate indentation of current line
-        const indentMatch = currentLine.match(/^(\s*)/);
-        let currentIndent = indentMatch ? indentMatch[1] : '';
-        
-        // Determine if we need to add extra indentation
-        let extraIndent = '';
-        const trimmedLine = currentLine.trim();
-        
-        // If current line ends with a colon (label), add indentation for next line
-        if (trimmedLine.endsWith(':')) {
-            extraIndent = '    '; // 4 spaces for instruction after label
+        // Insert newline with auto-indent in contenteditable div
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            
+            // Get current line for indentation calculation
+            const sourceDisplay = document.getElementById('sourceDisplay');
+            const text = sourceDisplay.innerText;
+            const cursorOffset = this.getCursorOffset(sourceDisplay);
+            
+            // Find the start of the current line
+            const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
+            const currentLine = text.substring(lineStart, cursorOffset);
+            
+            // Calculate indentation
+            const indentMatch = currentLine.match(/^(\s*)/);
+            let currentIndent = indentMatch ? indentMatch[1] : '';
+            
+            // Determine if we need extra indentation
+            let extraIndent = '';
+            const trimmedLine = currentLine.trim();
+            
+            if (trimmedLine.endsWith(':')) {
+                extraIndent = '    '; // 4 spaces for instruction after label
+            } else if (trimmedLine === '.text' || trimmedLine === '.data') {
+                extraIndent = '    '; // 4 spaces after directives
+            }
+            
+            // Insert newline with appropriate indentation
+            const newIndent = currentIndent + extraIndent;
+            const textNode = document.createTextNode('\n' + newIndent);
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.setEndAfter(textNode);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            // Update the hidden textarea
+            document.getElementById('sourceCode').value = document.getElementById('sourceDisplay').innerText;
         }
-        // If current line is a directive (.text, .data), add indentation
-        else if (trimmedLine === '.text' || trimmedLine === '.data') {
-            extraIndent = '    '; // 4 spaces after directives
+    }
+    
+    getCursorOffset(element) {
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(element);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            return preCaretRange.toString().length;
         }
-        // If current line is an instruction and we're at base level, maintain same level
-        else if (trimmedLine && !currentIndent && !trimmedLine.startsWith('.')) {
-            // This is an instruction at base level, maintain no indentation
-            currentIndent = '';
-        }
-        
-        // Insert newline with appropriate indentation
-        const newIndent = currentIndent + extraIndent;
-        const insertText = '\n' + newIndent;
-        
-        // Update the textarea
-        const newText = text.substring(0, start) + insertText + text.substring(start);
-        textarea.value = newText;
-        
-        // Move cursor to end of inserted text
-        const newCursorPos = start + insertText.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
-        textarea.focus();
+        return 0;
     }
     
     openFile() {
@@ -312,6 +302,7 @@ class AlbacoreSimulator {
                 reader.onload = (e) => {
                     const content = e.target.result;
                     document.getElementById('sourceCode').value = content;
+                    document.getElementById('sourceDisplay').innerText = content;
                     this.initialize(); // Reset simulator state when loading new file
                     this.log(`File "${file.name}" loaded successfully`);
                 };
@@ -330,7 +321,7 @@ class AlbacoreSimulator {
     }
     
     saveFile() {
-        const sourceCode = document.getElementById('sourceCode').value;
+        const sourceCode = this.getSourceCode();
         if (!sourceCode.trim()) {
             this.log('No content to save', true);
             return;
@@ -680,12 +671,12 @@ class AlbacoreSimulator {
             }
         }
         
-        return { memory, text, data, dataBase, labels, inverseLabels };
+        return { memory, text, data, dataBase, labels, inverseLabels, lineNumbers };
     }
     
     compile() {
         try {
-            const sourceCode = document.getElementById('sourceCode').value;
+            const sourceCode = this.getSourceCode();
             const result = this.assemble(sourceCode);
             
             this.memory = result.memory;
@@ -694,12 +685,14 @@ class AlbacoreSimulator {
             this.dataBase = result.dataBase;
             this.labels = result.labels;
             this.inverseLabels = result.inverseLabels;
+            this.lineNumbers = result.lineNumbers;
             this.compiled = true;
             
             this.log('Compilation successful');
             this.updateAssembledProgram();
             this.updateMemoryDisplay();
             this.updateDataLabelsDisplay();
+            this.updateSourceDisplay(); // Make sure source display is properly formatted
             this.reset();
             
         } catch (error) {
@@ -1031,16 +1024,18 @@ class AlbacoreSimulator {
     }
     
     highlightCurrentLine() {
+        console.log('highlightCurrentLine called');
         const display = document.getElementById('assembledProgram');
         const lines = display.innerHTML.split('\n');
         
-        // Remove previous highlighting
+        // Remove previous highlighting from assembled program
         for (let i = 0; i < lines.length; i++) {
             lines[i] = lines[i].replace(/<span class="highlighted-line">(.*?)<\/span>/, '$1');
         }
         
+        // Highlight current line in assembled program
         if (this.running && this.compiled) {
-            // Find the line corresponding to current PC
+            // Find the line corresponding to current PC in assembled program
             for (let i = 0; i < lines.length; i++) {
                 const match = lines[i].match(/@([0-9a-f]{4}):/);
                 if (match) {
@@ -1054,6 +1049,67 @@ class AlbacoreSimulator {
         }
         
         display.innerHTML = lines.join('\n');
+        
+        // Also highlight corresponding line in source code
+        this.highlightSourceLine();
+    }
+    
+    highlightSourceLine() {
+        console.log('highlightSourceLine called');
+        console.log('  - this.running:', this.running);
+        console.log('  - this.compiled:', this.compiled); 
+        console.log('  - this.pc:', this.pc);
+        console.log('  - this.pc in this.lineNumbers:', this.pc in this.lineNumbers);
+        console.log('  - this.lineNumbers:', this.lineNumbers);
+        
+        const sourceDisplay = document.getElementById('sourceDisplay');
+        
+        if (this.running && this.compiled && this.pc in this.lineNumbers) {
+            const currentSourceLine = this.lineNumbers[this.pc];
+            const sourceCode = this.getSourceCode();
+            const lines = sourceCode.split('\n');
+            
+            console.log('Highlighting line:', currentSourceLine, 'out of', lines.length, 'lines');
+            
+            if (currentSourceLine > 0 && currentSourceLine <= lines.length) {
+                // Create highlighted version of the source code
+                let highlightedContent = '';
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const lineNumber = i + 1;
+                    const line = lines[i];
+                    
+                    if (lineNumber === currentSourceLine) {
+                        highlightedContent += `<span class="highlighted-line">${this.escapeHtml(line)}</span>\n`;
+                        console.log('Added highlighting to line:', lineNumber, 'content:', line);
+                    } else {
+                        highlightedContent += this.escapeHtml(line) + '\n';
+                    }
+                }
+                
+                sourceDisplay.innerHTML = highlightedContent;
+                
+                // Optionally scroll to make the highlighted line visible
+                const lineHeight = parseFloat(getComputedStyle(sourceDisplay).lineHeight) || 20;
+                const scrollTop = (currentSourceLine - 1) * lineHeight - sourceDisplay.clientHeight / 2;
+                const newScrollTop = Math.max(0, Math.min(scrollTop, sourceDisplay.scrollHeight - sourceDisplay.clientHeight));
+                
+                sourceDisplay.scrollTop = newScrollTop;
+            } else {
+                console.log('Line number out of range:', currentSourceLine, 'total lines:', lines.length);
+            }
+        } else {
+            // No highlighting - just show plain source code
+            console.log('Not highlighting - conditions not met');
+            const sourceCode = this.getSourceCode();
+            sourceDisplay.innerHTML = this.escapeHtml(sourceCode);
+        }
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 
