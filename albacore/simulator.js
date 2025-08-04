@@ -953,11 +953,13 @@ class AlbacoreSimulator {
         let html = '';
         for (let reg = 0; reg < 16; reg += 2) {
             const signedVal1 = this.signExtend(this.regs[reg], 16);
-            html += `r${reg}=0x${this.regs[reg].toString(16).padStart(4, '0')}(${signedVal1})`;
+            const reg1Text = `r${reg}=0x${this.regs[reg].toString(16).padStart(4, '0')}(${signedVal1})`;
+            html += reg1Text.padEnd(20, ' ');
             
             if (reg + 1 < 16) {
                 const signedVal2 = this.signExtend(this.regs[reg + 1], 16);
-                html += `  r${reg + 1}=0x${this.regs[reg + 1].toString(16).padStart(4, '0')}(${signedVal2})`;
+                const reg2Text = `r${reg + 1}=0x${this.regs[reg + 1].toString(16).padStart(4, '0')}(${signedVal2})`;
+                html += reg2Text.padEnd(20, ' ');
             }
             html += '\n';
         }
