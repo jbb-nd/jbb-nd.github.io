@@ -1033,6 +1033,8 @@ class AlbacoreSimulator {
             lines[i] = lines[i].replace(/<span class="highlighted-line">(.*?)<\/span>/, '$1');
         }
         
+        let highlightedLineIndex = -1;
+        
         // Highlight current line in assembled program
         if (this.running && this.compiled) {
             // Find the line corresponding to current PC in assembled program
@@ -1042,6 +1044,7 @@ class AlbacoreSimulator {
                     const addr = parseInt(match[1], 16);
                     if (addr === this.pc) {
                         lines[i] = `<span class="highlighted-line">${lines[i]}</span>`;
+                        highlightedLineIndex = i;
                         break;
                     }
                 }
@@ -1049,6 +1052,15 @@ class AlbacoreSimulator {
         }
         
         display.innerHTML = lines.join('\n');
+        
+        // Auto-scroll to keep highlighted line visible
+        if (highlightedLineIndex >= 0) {
+            const lineHeight = parseFloat(getComputedStyle(display).lineHeight) || 20;
+            const scrollTop = highlightedLineIndex * lineHeight - display.clientHeight / 2;
+            const newScrollTop = Math.max(0, Math.min(scrollTop, display.scrollHeight - display.clientHeight));
+            
+            display.scrollTop = newScrollTop;
+        }
         
         // Also highlight corresponding line in source code
         this.highlightSourceLine();
