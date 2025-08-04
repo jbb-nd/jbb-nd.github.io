@@ -946,6 +946,7 @@ class AlbacoreSimulator {
         this.updatePC();
         this.updateStatus();
         this.updateMemoryDisplay();
+        this.updateDataLabelsDisplay();
     }
     
     updateRegisters() {
