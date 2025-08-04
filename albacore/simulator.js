@@ -72,6 +72,10 @@ class AlbacoreSimulator {
             console.log('Run button clicked');
             this.runToEnd();
         });
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            console.log('Stop button clicked');
+            this.stop();
+        });
         document.getElementById('resetBtn').addEventListener('click', () => {
             console.log('Reset button clicked');
             this.compile(); // Reset now recompiles and restarts
@@ -893,6 +897,16 @@ class AlbacoreSimulator {
         }
     }
     
+    stop() {
+        if (this.compiled && this.running) {
+            this.running = false;
+            this.log('Execution stopped by user');
+            this.clearHighlighting();
+            this.updateDisplay();
+            this.updateControls();
+        }
+    }
+    
     reset() {
         this.regs = new Array(16).fill(0);
         this.pc = 0;
@@ -970,6 +984,7 @@ class AlbacoreSimulator {
         console.log('updateControls - compiled:', this.compiled, 'running:', this.running, 'canExecute:', canExecute);
         document.getElementById('stepBtn').disabled = !canExecute;
         document.getElementById('runBtn').disabled = !canExecute;
+        document.getElementById('stopBtn').disabled = !canExecute;
         document.getElementById('resetBtn').disabled = !this.compiled;
     }
     
@@ -1118,6 +1133,23 @@ class AlbacoreSimulator {
         }
     }
     
+    clearHighlighting() {
+        // Clear highlighting in assembled program
+        const assembledDisplay = document.getElementById('assembledProgram');
+        const assembledLines = assembledDisplay.innerHTML.split('\n');
+        
+        for (let i = 0; i < assembledLines.length; i++) {
+            assembledLines[i] = assembledLines[i].replace(/<span class="highlighted-line">(.*?)<\/span>/, '$1');
+        }
+        
+        assembledDisplay.innerHTML = assembledLines.join('\n');
+        
+        // Clear highlighting in source code
+        const sourceDisplay = document.getElementById('sourceDisplay');
+        const sourceCode = this.getSourceCode();
+        sourceDisplay.innerHTML = this.escapeHtml(sourceCode);
+    }
+    
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -1136,7 +1168,7 @@ A web-based JavaScript implementation of the Albacore microprocessor simulator.
 - **Professional Toolbar**: Organized controls with grouped buttons for file operations, compilation, and execution
 - **Assembly Code Editor**: Enter assembly language source code with advanced editor features
 - **Compilation**: Compile assembly code and display any errors
-- **Step-by-step Execution**: Execute instructions one at a time
+- **Step-by-step Execution**: Execute instructions one at a time with full control (step, run, stop)
 - **Memory Display**: View current memory contents
 - **Register Display**: Monitor all 16 registers
 - **Data Labels**: View data segment labels and values
@@ -1149,7 +1181,7 @@ A web-based JavaScript implementation of the Albacore microprocessor simulator.
 1. Open the simulator in a web browser
 2. Load an assembly file using the "Open" button or type directly in the source editor
 3. Click the "Compile" button in the toolbar to assemble your code
-4. Use "Step" for single-step execution or "Run" for full execution
+4. Use "Step" for single-step execution, "Run" for full execution, or "Stop" to halt at any time
 5. Monitor registers, memory, and data labels in real-time
 
 ### Toolbar Controls
@@ -1164,6 +1196,7 @@ The main toolbar contains all essential controls organized by function:
 - **Compile**: Assemble the source code
 - **Step**: Execute one instruction at a time
 - **Run**: Execute program to completion
+- **Stop**: Halt execution immediately and clear highlighting
 - **Reset**: Recompile and restart execution from beginning
 
 #### Status & Help
@@ -1221,6 +1254,7 @@ result: .word 0
 
 - **Compilation Errors**: Check the console panel for detailed error messages
 - **Program Not Running**: Ensure you have compiled the code first
+- **Stopping Execution**: Use the Stop button to halt execution at any time and clear highlighting
 - **Unexpected Behavior**: Use single-step mode for debugging`;
 }
 
