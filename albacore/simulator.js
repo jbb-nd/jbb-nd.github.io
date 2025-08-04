@@ -71,11 +71,7 @@ class AlbacoreSimulator {
         });
         document.getElementById('resetBtn').addEventListener('click', () => {
             console.log('Reset button clicked');
-            this.reset();
-        });
-        document.getElementById('initializeBtn').addEventListener('click', () => {
-            console.log('Initialize button clicked');
-            this.initialize();
+            this.compile(); // Reset now recompiles and restarts
         });
         document.getElementById('helpBtn').addEventListener('click', () => {
             console.log('Help button clicked');
@@ -142,13 +138,9 @@ class AlbacoreSimulator {
             } else if (isModifier && event.key === 'r') {
                 event.preventDefault();
                 if (this.compiled) {
-                    this.reset();
-                    this.log('Reset triggered by Ctrl/Cmd+R');
+                    this.compile();
+                    this.log('Reset (recompile) triggered by Ctrl/Cmd+R');
                 }
-            } else if (isModifier && event.key === 'i') {
-                event.preventDefault();
-                this.initialize();
-                this.log('Initialize triggered by Ctrl/Cmd+I');
             }
         });
         
@@ -320,6 +312,7 @@ class AlbacoreSimulator {
                 reader.onload = (e) => {
                     const content = e.target.result;
                     document.getElementById('sourceCode').value = content;
+                    this.initialize(); // Reset simulator state when loading new file
                     this.log(`File "${file.name}" loaded successfully`);
                 };
                 reader.onerror = () => {
@@ -1101,10 +1094,9 @@ The main toolbar contains all essential controls organized by function:
 
 #### Compilation & Execution
 - **Compile**: Assemble the source code
-- **Initialize**: Clear all data and reset simulator
 - **Step**: Execute one instruction at a time
 - **Run**: Execute program to completion
-- **Reset**: Reset execution to beginning
+- **Reset**: Recompile and restart execution from beginning
 
 #### Status & Help
 - **PC Display**: Shows current program counter
@@ -1146,8 +1138,7 @@ result: .word 0
 - **F9**: Compile the assembly code
 - **F10**: Single step execution
 - **F5**: Run to end
-- **Ctrl+R**: Reset execution
-- **Ctrl+I**: Initialize (clear all)
+- **Ctrl+R**: Reset (recompile and restart) execution
 
 ### File Operations
 - **Ctrl+O**: Open assembly file
