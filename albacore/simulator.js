@@ -215,9 +215,168 @@ class AlbacoreSimulator {
     }
     
     toggleComment() {
-        // For now, let's disable the complex editing functions with the display div
-        // and just update the content after editing
-        this.log('Comment toggle - please edit the source code directly');
+        const sourceDisplay = document.getElementById('sourceDisplay');
+        const selection = window.getSelection();
+        
+        if (selection.rangeCount === 0) return;
+        
+        const range = selection.getRangeAt(0);
+        const text = sourceDisplay.innerText;
+        const lines = text.split('\n');
+        
+        // Get the actual start and end offsets of the selection
+        const startOffset = this.getOffsetFromRange(sourceDisplay, range.startContainer, range.startOffset);
+        const endOffset = this.getOffsetFromRange(sourceDisplay, range.endContainer, range.endOffset);
+        
+        // Find which lines are affected by the selection
+        let currentPos = 0;
+        let startLine = -1;
+        let endLine = -1;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const lineStart = currentPos;
+            const lineEnd = currentPos + lines[i].length;
+            
+            // Check if this line intersects with the selection
+            if (startLine === -1 && (startOffset >= lineStart && startOffset <= lineEnd)) {
+                startLine = i;
+            }
+            if (endOffset >= lineStart && endOffset <= lineEnd) {
+                endLine = i;
+            }
+            
+            currentPos = lineEnd + 1; // +1 for the newline character
+        }
+        
+        // If no lines found, default to current cursor line
+        if (startLine === -1 || endLine === -1) {
+            for (let i = 0; i < lines.length; i++) {
+                const lineStart = currentPos;
+                const lineEnd = currentPos + lines[i].length;
+                
+                if (startOffset >= lineStart && startOffset <= lineEnd) {
+                    startLine = endLine = i;
+                    break;
+                }
+                currentPos = lineEnd + 1;
+            }
+        }
+        
+        // Ensure we have valid line numbers
+        if (startLine === -1) startLine = 0;
+        if (endLine === -1) endLine = startLine;
+        
+        // Toggle comments for the selected lines
+        let modified = false;
+        for (let i = startLine; i <= endLine; i++) {
+            if (i >= lines.length) break;
+            
+            const trimmedLine = lines[i].trim();
+            if (trimmedLine.startsWith('// ')) {
+                // Remove comment
+                lines[i] = lines[i].replace(/^(\s*)(\/\/ )/, '$1');
+                modified = true;
+            } else if (trimmedLine.length > 0) {
+                // Add comment - find the indentation and insert after it
+                const indentMatch = lines[i].match(/^(\s*)/);
+                const indent = indentMatch ? indentMatch[1] : '';
+                const restOfLine = lines[i].substring(indent.length);
+                lines[i] = indent + '// ' + restOfLine;
+                modified = true;
+            }
+        }
+        
+        if (modified) {
+            // Update the display with the modified content
+            const newContent = lines.join('\n');
+            sourceDisplay.innerHTML = this.escapeHtml(newContent);
+            
+            // Update the hidden textarea
+            document.getElementById('sourceCode').value = newContent;
+            
+            // Try to restore selection/cursor position
+            this.restoreSelectionAfterEdit(sourceDisplay, startLine, endLine);
+        }
+    }
+    
+    getOffsetFromRange(element, container, offset) {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.setEnd(container, offset);
+        return range.toString().length;
+    }
+    
+    restoreSelectionAfterEdit(sourceDisplay, startLine, endLine) {
+        try {
+            const text = sourceDisplay.innerText;
+            const lines = text.split('\n');
+            
+            // Calculate the start position of the first edited line
+            let startPos = 0;
+            for (let i = 0; i < startLine && i < lines.length; i++) {
+                startPos += lines[i].length + 1; // +1 for newline
+            }
+            
+            // Calculate the end position of the last edited line
+            let endPos = startPos;
+            for (let i = startLine; i <= endLine && i < lines.length; i++) {
+                if (i > startLine) endPos += 1; // Add newline
+                endPos += lines[i].length;
+            }
+            
+            // Create a tree walker to find text nodes
+            const walker = document.createTreeWalker(
+                sourceDisplay,
+                NodeFilter.SHOW_TEXT,
+                null,
+                false
+            );
+            
+            let currentOffset = 0;
+            let startNode = null, startNodeOffset = 0;
+            let endNode = null, endNodeOffset = 0;
+            
+            while (walker.nextNode()) {
+                const node = walker.currentNode;
+                const nodeLength = node.textContent.length;
+                
+                // Find start position
+                if (!startNode && currentOffset + nodeLength >= startPos) {
+                    startNode = node;
+                    startNodeOffset = startPos - currentOffset;
+                }
+                
+                // Find end position
+                if (!endNode && currentOffset + nodeLength >= endPos) {
+                    endNode = node;
+                    endNodeOffset = endPos - currentOffset;
+                    break;
+                }
+                
+                currentOffset += nodeLength;
+            }
+            
+            // Set the selection
+            if (startNode && endNode) {
+                const selection = window.getSelection();
+                const range = document.createRange();
+                
+                range.setStart(startNode, Math.min(startNodeOffset, startNode.textContent.length));
+                range.setEnd(endNode, Math.min(endNodeOffset, endNode.textContent.length));
+                
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        } catch (e) {
+            // If positioning fails, just place cursor at start
+            console.warn('Failed to restore selection:', e);
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.setStart(sourceDisplay, 0);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
     }
     
     insertTab() {
@@ -561,6 +720,9 @@ class AlbacoreSimulator {
                     if (isNaN(immLd)) {
                         throw new AssemblyError(`Invalid immediate value: ${tokens[3]}`, addr);
                     }
+                    if (immLd < 0 || immLd > 15) {
+                        throw new AssemblyError(`Unsigned integer 0x${immLd.toString(16)} (${immLd}) outside 4-bit range`, addr);
+                    }
                     code = (opcode << 12) | (rdLd << 8) | ((immLd & 0xF) << 4) | rs1Ld;
                     break;
                     
@@ -572,37 +734,79 @@ class AlbacoreSimulator {
                     if (isNaN(immSt)) {
                         throw new AssemblyError(`Invalid immediate value: ${tokens[3]}`, addr);
                     }
+                    if (immSt < 0 || immSt > 15) {
+                        throw new AssemblyError(`Unsigned integer 0x${immSt.toString(16)} (${immSt}) outside 4-bit range`, addr);
+                    }
                     code = (opcode << 12) | ((immSt & 0xF) << 8) | (rs1St << 4) | rs2St;
                     break;
-                    
+
                 case 'BZ_BN':
                     checkArgCount(2);
                     const rs1Br = reg(tokens[1]);
-                    const labelBr = tokens[2];
-                    if (!(labelBr in labels)) {
-                        throw new AssemblyError(`Undefined label: ${labelBr}`, addr);
+                    const offsetStr = tokens[2];
+                    let offsetBr;
+                    
+                    // Try to parse as integer first
+                    offsetBr = parseInt(offsetStr, 0);
+                    if (isNaN(offsetBr)) {
+                        // If parsing fails, treat as label (PC-relative)
+                        if (!(offsetStr in labels)) {
+                            throw new AssemblyError(`Undefined label: ${offsetStr}`, addr);
+                        }
+                        offsetBr = labels[offsetStr] - addr;
                     }
-                    const offsetBr = (labels[labelBr] - addr) & 0xFF;
-                    code = (opcode << 12) | (offsetBr << 4) | rs1Br;
+                    
+                    // Validate 8-bit range
+                    if (offsetBr < -128 || offsetBr > 255) {
+                        throw new AssemblyError(`Integer 0x${offsetBr.toString(16)} (${offsetBr}) outside 8-bit range`, addr);
+                    }
+                    
+                    code = (opcode << 12) | ((offsetBr & 0xFF) << 4) | rs1Br;
                     break;
                     
                 case 'BR':
                     checkArgCount(1);
-                    const labelBrUn = tokens[1];
-                    if (!(labelBrUn in labels)) {
-                        throw new AssemblyError(`Undefined label: ${labelBrUn}`, addr);
+                    const offsetStrBr = tokens[1];
+                    let offsetBrUn;
+                    
+                    // Try to parse as integer first
+                    offsetBrUn = parseInt(offsetStrBr, 0);
+                    if (isNaN(offsetBrUn)) {
+                        // If parsing fails, treat as label (PC-relative)
+                        if (!(offsetStrBr in labels)) {
+                            throw new AssemblyError(`Undefined label: ${offsetStrBr}`, addr);
+                        }
+                        offsetBrUn = labels[offsetStrBr] - addr;
                     }
-                    const offsetBrUn = (labels[labelBrUn] - addr) & 0xFF;
-                    code = (opcode << 12) | (offsetBrUn << 4) | 0;
+                    
+                    // Validate 8-bit range
+                    if (offsetBrUn < -128 || offsetBrUn > 255) {
+                        throw new AssemblyError(`Integer 0x${offsetBrUn.toString(16)} (${offsetBrUn}) outside 8-bit range`, addr);
+                    }
+                    
+                    code = (opcode << 12) | ((offsetBrUn & 0xFF) << 4) | 0;
                     break;
                     
                 case 'JAL':
                     checkArgCount(1);
-                    const labelJal = tokens[1];
-                    if (!(labelJal in labels)) {
-                        throw new AssemblyError(`Undefined label: ${labelJal}`, addr);
+                    const targetStr = tokens[1];
+                    let target;
+                    
+                    // Try to parse as integer first
+                    target = parseInt(targetStr, 0);
+                    if (isNaN(target)) {
+                        // If parsing fails, treat as label
+                        if (!(targetStr in labels)) {
+                            throw new AssemblyError(`Undefined label: ${targetStr}`, addr);
+                        }
+                        target = labels[targetStr] & 0x0FFF;
                     }
-                    const target = labels[labelJal] & 0x0FFF;
+                    
+                    // Validate 12-bit range
+                    if (target < 0x000 || target > 0xFFF) {
+                        throw new AssemblyError(`Integer 0x${target.toString(16)} (${target}) outside 12-bit range`, addr);
+                    }
+                    
                     code = (opcode << 12) | target;
                     break;
                     
