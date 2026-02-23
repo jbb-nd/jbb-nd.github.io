@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Making Waves: Vibrating String Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="../lib/physics-lab.js"></script>
+    <style>
+        body { background: #0a0a0c; color: #ececec; }
+
+        .panel {
+            background: #16161a;
+            border: 1px solid #2a2a2e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            border: 1px solid #2a2a2e;
+        }
+
+        .canvas-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #4af;
+            margin-bottom: 4px;
+        }
+
+        .tuner-box {
+            background: #000;
+            border: 1px solid #2a2a2e;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-family: monospace;
+            text-align: center;
+        }
+
+        .tuner-note { font-size: 2rem; font-weight: bold; color: #4af; line-height: 1; }
+        .tuner-cents { font-size: 0.75rem; color: #888; }
+        .tuner-freq  { font-size: 0.85rem; color: #fff; margin-top: 2px; }
+
+        .val-badge {
+            background: #222;
+            color: #fff;
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 1px 6px;
+            border-radius: 4px;
+            float: right;
+        }
+
+        label { font-size: 0.75rem; color: #aaa; text-transform: uppercase; }
+
+        input[type="range"] { accent-color: #4af; width: 100%; }
+
+        h5 { font-size: 0.8rem; color: #4af; text-transform: uppercase;
+             letter-spacing: 2px; border-bottom: 1px solid #2a2a2e;
+             padding-bottom: 6px; margin-bottom: 12px; }
+
+        #btnAudio { min-width: 120px; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid py-3 px-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0" style="font-weight:300;">
+            Making Waves &nbsp;<span style="opacity:0.4">|</span>&nbsp; Vibrating String
+        </h4>
+        <div class="tuner-box" style="min-width:160px;">
+            <div id="tunerNote" class="tuner-note">--</div>
+            <div id="tunerCents" class="tuner-cents">--</div>
+            <div id="tunerFreq"  class="tuner-freq">0.00 Hz</div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <!-- ── Left: canvases ─────────────────────────────────────── -->
+        <div class="col-lg-8 d-flex flex-column gap-3">
+
+            <div class="panel">
+                <div class="canvas-label">String — Physical View</div>
+                <canvas id="stringCanvas" height="150"></canvas>
+                <div class="mt-2 text-center">
+                    <small class="text-secondary">Click or tap the string to pluck it</small>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Oscilloscope — Time Domain</div>
+                    <span id="scopeModeLabel" style="font-size:0.65rem; color:#a4f; font-family:monospace;"></span>
+                </div>
+                <canvas id="scopeCanvas" height="110"></canvas>
+            </div>
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Spectrum — Frequency Domain</div>
+                    <div id="peakLabel" style="font-family:monospace; font-size:0.75rem; color:#fff;"></div>
+                </div>
+                <canvas id="specCanvas" height="140"></canvas>
+            </div>
+
+        </div>
+
+        <!-- ── Right: controls ───────────────────────────────────── -->
+        <div class="col-lg-4">
+            <div class="panel h-100 d-flex flex-column gap-3">
+
+                <!-- Audio control -->
+                <div class="d-flex gap-2">
+                    <button id="btnAudio" class="btn btn-outline-danger flex-grow-1"
+                            onclick="App.toggleAudio()">Start Audio</button>
+                    <button class="btn btn-outline-secondary flex-grow-1"
+                            onclick="App.pluck()">Pluck</button>
+                </div>
+
+                <!-- String -->
+                <div>
+                    <h5>String</h5>
+
+                    <label>Nodes (N) <span id="valN" class="val-badge">30</span></label>
+                    <input type="range" id="paramN" min="1" max="3.477" step="0.005" value="1.477">
+
+                    <label class="mt-2">Stiffness (k) <span id="valK" class="val-badge">0.150</span></label>
+                    <input type="range" id="paramK" min="-3" max="-0.602" step="0.01" value="-0.824">
+
+                    <label class="mt-2">Damping <span id="valD" class="val-badge">0.000200</span></label>
+                    <input type="range" id="paramD" min="-5" max="-2.3" step="0.05" value="-3.7">
+                </div>
+
+                <!-- Pluck -->
+                <div>
+                    <h5>Pluck</h5>
+
+                    <label>Position <span id="valPos" class="val-badge">0.30</span></label>
+                    <input type="range" id="paramPos" min="0.05" max="0.95" step="0.01" value="0.3">
+
+                    <label class="mt-2">Width (nodes) <span id="valWidth" class="val-badge">5.0</span></label>
+                    <input type="range" id="paramWidth" min="0.5" max="20" step="0.5" value="5">
+
+                    <label class="mt-2">Amplitude <span id="valAmp" class="val-badge">1.00</span></label>
+                    <input type="range" id="paramAmp" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+
+                <!-- Audio -->
+                <div>
+                    <h5>Audio Output</h5>
+
+                    <label>Volume <span id="valVol" class="val-badge">50%</span></label>
+                    <input type="range" id="paramVol" min="0" max="100" step="1" value="50">
+                </div>
+
+                <!-- Theoretical frequency display -->
+                <div class="mt-auto">
+                    <h5>Theory</h5>
+                    <div style="font-family:monospace; font-size:0.8rem; color:#aaa; line-height:1.8;">
+                        <div>f₁ (theory): <span id="theoryF1" style="color:#fff;">—</span></div>
+                        <div>f₂ (theory): <span id="theoryF2" style="color:#fff;">—</span></div>
+                        <div>f₃ (theory): <span id="theoryF3" style="color:#fff;">—</span></div>
+                    </div>
+                    <div id="subaudibleWarn" class="mt-1" style="font-size:0.8rem; font-family:monospace; min-height:1.2em;"></div>
+                    <div class="mt-1" style="font-size:0.7rem; color:#555;">
+                        f<sub>n</sub> = (f<sub>s</sub>/π) arcsin(√k · sin(nπ/2(N−1)))
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+'use strict';
+
+// physics-lab.js is loaded by the <script> tag at the bottom of <body>.
+// All shared infrastructure (AudioEngine, Scope, Spectrum, Tuner, etc.)
+// lives there. This file contains only string-specific code.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+const FFT_SIZE     = 8192;   // must match AudioEngine.create({ fftSize })
+const RING_BUF_SIZE = 1024;  // slow-scope ring buffer entries
+const RING_RATE     = PhysicsLab.SAMPLE_RATE / (8 * 128); // ≈43 snapshots/sec
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State  (string-specific parameters + engine handle)
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {
+    // String physics parameters
+    N:          30,
+    k:          0.15,
+    damping:    0.0002,
+    pluckPos:   0.30,
+    pluckWidth: 5.0,
+    pluckAmp:   1.0,
+    volume:     0.50,
+
+    // Audio engine (null until Start Audio is clicked)
+    // Shape: { audioCtx, workletNode, gainNode, analyser,
+    //          timeDomainBuf, frequencyBuf, binHz }
+    engine: null,
+
+    // Latest position snapshot from worklet
+    positions: new Float32Array(30),
+
+    // Peak envelope tracker (from PhysicsLab)
+    envelope: new PhysicsLab.EnvelopeTracker(30, 0.9985),
+
+    // Smoothed peak frequency for tuner stability
+    smoothedPeak: null,
+
+    // Slow-scope ring buffer — one output-node sample per worklet snapshot
+    // Fills at RING_RATE ≈ 43 Hz; 1024 entries ≈ 24 seconds
+    scopeRingBuf:   new Float32Array(RING_BUF_SIZE),
+    scopeRingPos:   0,   // next write index
+    scopeRingCount: 0,   // total pushes (capped at RING_BUF_SIZE for display)
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// String-specific physics: exact dispersion relation for fixed-end chain
+// f_n = (fs/π) · arcsin( √k · sin(nπ / 2(N−1)) )
+// ─────────────────────────────────────────────────────────────────────────────
+function theoreticalFreq(n, N, k, fs = PhysicsLab.SAMPLE_RATE) {
+    const arg = Math.sqrt(k) * Math.sin(n * Math.PI / (2 * (N - 1)));
+    if (arg >= 1.0) return null; // above Nyquist
+    return (fs / Math.PI) * Math.asin(arg);
+}
+
+function updateTheoryDisplay() {
+    const { N, k } = state;
+    for (let n = 1; n <= 3; n++) {
+        const f = theoreticalFreq(n, N, k);
+        document.getElementById(`theoryF${n}`).textContent =
+            f !== null ? `${f.toFixed(1)} Hz` : '—';
+    }
+    updateSubaudibleGuard();
+}
+
+function updateSubaudibleGuard() {
+    const f1 = theoreticalFreq(1, state.N, state.k);
+    const warnEl = document.getElementById('subaudibleWarn');
+    if (!warnEl) return;
+
+    const isMuted      = f1 !== null && f1 < 5;
+    const isSubaudible = f1 !== null && f1 < 20;
+
+    if (isMuted) {
+        warnEl.textContent = '⚠ below 5 Hz — audio muted';
+        warnEl.style.color = '#f84';
+    } else if (isSubaudible) {
+        warnEl.textContent = '⚠ subaudible';
+        warnEl.style.color = '#fa0';
+    } else {
+        warnEl.textContent = '';
+    }
+
+    if (state.engine) {
+        const targetGain = isMuted ? 0 : state.volume;
+        state.engine.gainNode.gain.setTargetAtTime(
+            targetGain, state.engine.audioCtx.currentTime, 0.05
+        );
+    }
+}
+
+// Build marker array for PhysicsLab.Spectrum.draw()
+function theoryMarkers() {
+    const colors = ['#ff4', '#f84', '#4f4'];
+    return [1, 2, 3].map((n, i) => ({
+        freq:  theoreticalFreq(n, state.N, state.k),
+        label: `f${n}`,
+        color: colors[i]
+    }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas references (oscilloscope + spectrum drawn by PhysicsLab;
+// string physical view drawn by drawString() below)
+// ─────────────────────────────────────────────────────────────────────────────
+const stringCanvas = document.getElementById('stringCanvas');
+const scopeCanvas  = document.getElementById('scopeCanvas');
+const specCanvas   = document.getElementById('specCanvas');
+const strCtx       = stringCanvas.getContext('2d');
+
+function drawString(positions) {
+    const W    = stringCanvas.width;
+    const H    = stringCanvas.height;
+    const N    = positions.length;
+    const peak = state.envelope.peak;
+
+    strCtx.fillStyle = '#000';
+    strCtx.fillRect(0, 0, W, H);
+
+    if (N < 2) return;
+
+    // Scale based on peak envelope so view is stable while string rings
+    let maxPeak = 0.001;
+    for (let i = 0; i < N; i++) maxPeak = Math.max(maxPeak, peak[i]);
+    const scale = (H * 0.42) / maxPeak;
+
+    // Draw equilibrium line
+    strCtx.strokeStyle = '#222';
+    strCtx.lineWidth = 1;
+    strCtx.beginPath();
+    strCtx.moveTo(0, H/2);
+    strCtx.lineTo(W, H/2);
+    strCtx.stroke();
+
+    // ── Envelope fill (upper half, then lower half mirrored) ──────────
+    // Traces +peak[i] top edge and -peak[i] bottom edge, closed into a
+    // filled lens shape — exactly what the eye sees on a real string.
+    strCtx.beginPath();
+    // Top edge (left → right)
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 - peak[i] * scale;
+        if (i === 0) strCtx.moveTo(x, y);
+        else         strCtx.lineTo(x, y);
+    }
+    // Bottom edge (right → left)
+    for (let i = N - 1; i >= 0; i--) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 + peak[i] * scale;
+        strCtx.lineTo(x, y);
+    }
+    strCtx.closePath();
+    strCtx.fillStyle = 'rgba(68, 170, 255, 0.18)';
+    strCtx.fill();
+
+    // Envelope edges (top and bottom outlines)
+    strCtx.strokeStyle = 'rgba(68, 170, 255, 0.55)';
+    strCtx.lineWidth = 1.5;
+    // Top edge
+    strCtx.beginPath();
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 - peak[i] * scale;
+        if (i === 0) strCtx.moveTo(x, y);
+        else         strCtx.lineTo(x, y);
+    }
+    strCtx.stroke();
+    // Bottom edge
+    strCtx.beginPath();
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 + peak[i] * scale;
+        if (i === 0) strCtx.moveTo(x, y);
+        else         strCtx.lineTo(x, y);
+    }
+    strCtx.stroke();
+
+    // ── Instantaneous string position (bright line inside envelope) ───
+    strCtx.strokeStyle = '#fff';
+    strCtx.lineWidth = 1.5;
+    strCtx.beginPath();
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 - positions[i] * scale;
+        if (i === 0) strCtx.moveTo(x, y);
+        else         strCtx.lineTo(x, y);
+    }
+    strCtx.stroke();
+
+    // Draw fixed-end markers
+    strCtx.fillStyle = '#f84';
+    strCtx.beginPath();
+    strCtx.arc(0, H/2, 5, 0, Math.PI*2);
+    strCtx.fill();
+    strCtx.beginPath();
+    strCtx.arc(W, H/2, 5, 0, Math.PI*2);
+    strCtx.fill();
+
+    // Draw pluck position indicator
+    const px = state.pluckPos * W;
+    strCtx.strokeStyle = 'rgba(255,200,0,0.3)';
+    strCtx.lineWidth = 1;
+    strCtx.setLineDash([4, 4]);
+    strCtx.beginPath();
+    strCtx.moveTo(px, 0);
+    strCtx.lineTo(px, H);
+    strCtx.stroke();
+    strCtx.setLineDash([]);
+}
+
+// Scope and Spectrum are drawn by PhysicsLab.Scope.draw() and
+// PhysicsLab.Spectrum.draw() in the animation loop below.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slow-scope helper — returns a normalised Float32Array slice from the ring
+// buffer spanning approximately 4 periods of f1, ready for Scope.draw().
+// ─────────────────────────────────────────────────────────────────────────────
+function getSlowScopeView(f1) {
+    const available = state.scopeRingCount;
+    if (available < 2) return new Float32Array(2);
+
+    // Number of ring-buffer entries covering ~4 periods at f1
+    const cycleSamples = Math.ceil(4 * RING_RATE / Math.max(f1, 0.1));
+    const n = Math.max(4, Math.min(cycleSamples, available));
+
+    // Extract the most-recent n entries in chronological order
+    const out = new Float32Array(n);
+    const writePos = state.scopeRingPos % RING_BUF_SIZE;
+    for (let i = 0; i < n; i++) {
+        const idx = (writePos - n + i + RING_BUF_SIZE * 4) % RING_BUF_SIZE;
+        out[i] = state.scopeRingBuf[idx];
+    }
+
+    // Normalise to ±1 using the envelope peak at the centre node
+    const peakIdx  = Math.floor((state.positions.length - 1) / 2);
+    const peakAmp  = state.envelope.peak[peakIdx] || 0.001;
+    for (let i = 0; i < n; i++) out[i] /= peakAmp;
+
+    return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App — string-specific parameter management and audio lifecycle
+// ─────────────────────────────────────────────────────────────────────────────
+const App = {
+
+    async toggleAudio() {
+        const btn    = document.getElementById('btnAudio');
+        const action = PhysicsLab.AudioEngine.cycleButton(
+            state.engine?.audioCtx ?? null, btn
+        );
+        if (action === 'create') {
+            await this._initAudio();
+            this.pluck(); // auto-pluck on start
+        }
+    },
+
+    async _initAudio() {
+        state.engine = await PhysicsLab.AudioEngine.create({
+            workletUrl:    'string-worklet.js',
+            processorName: 'string-processor',
+            parameterData: { stiffness: state.k, damping: state.damping },
+            fftSize:       FFT_SIZE,
+            initialGain:   state.volume
+        });
+
+        // Receive position snapshots — update local array and envelope tracker
+        state.engine.workletNode.port.onmessage = (e) => {
+            if (e.data.type === 'positions') {
+                state.positions = e.data.data;
+                state.envelope.update(state.positions);
+                // Push centre node into slow-scope ring buffer
+                const posLen = state.positions.length;
+                const centre = posLen > 0 ? (state.positions[Math.floor((posLen - 1) / 2)] || 0) : 0;
+                state.scopeRingBuf[state.scopeRingPos % RING_BUF_SIZE] = centre;
+                state.scopeRingPos++;
+                state.scopeRingCount = Math.min(state.scopeRingCount + 1, RING_BUF_SIZE);
+            }
+        };
+
+        state.engine.workletNode.port.postMessage({ type: 'setN', n: state.N });
+    },
+
+    pluck() {
+        if (!state.engine) return;
+        state.engine.workletNode.port.postMessage({
+            type:      'pluck',
+            position:  state.pluckPos,
+            amplitude: state.pluckAmp,
+            width:     state.pluckWidth
+        });
+    },
+
+    // Parameter setters — badges are updated by bindSlider() before these are called
+    setN(val) {
+        state.N = Math.round(Math.pow(10, val));
+        state.positions = new Float32Array(state.N);
+        state.envelope.resize(state.N);
+        // Clear ring buffer on N change — old data is from a different string length
+        state.scopeRingBuf.fill(0);
+        state.scopeRingPos   = 0;
+        state.scopeRingCount = 0;
+        if (state.engine) {
+            state.engine.workletNode.port.postMessage({ type: 'setN', n: state.N });
+        }
+        updateTheoryDisplay();
+    },
+
+    setK(val) {
+        state.k = Math.pow(10, val);
+        if (state.engine) {
+            state.engine.workletNode.parameters.get('stiffness').setTargetAtTime(
+                state.k, state.engine.audioCtx.currentTime, 0.01
+            );
+        }
+        updateTheoryDisplay();
+    },
+
+    setDamping(val) {
+        // Slider is in log10 space; convert to linear damping coefficient
+        state.damping = Math.pow(10, val);
+        if (state.engine) {
+            state.engine.workletNode.parameters.get('damping').setTargetAtTime(
+                state.damping, state.engine.audioCtx.currentTime, 0.01
+            );
+        }
+    },
+
+    setPluckPos(val)   { state.pluckPos   = val; },
+    setPluckWidth(val) { state.pluckWidth = val; },
+    setPluckAmp(val)   { state.pluckAmp   = val; },
+
+    setVolume(val) {
+        state.volume = val / 100;
+        if (state.engine) {
+            // Respect mute state: don't restore gain if we're in the subaudible-mute zone
+            const f1 = theoreticalFreq(1, state.N, state.k);
+            const targetGain = (f1 !== null && f1 < 5) ? 0 : state.volume;
+            state.engine.gainNode.gain.setTargetAtTime(
+                targetGain, state.engine.audioCtx.currentTime, 0.05
+            );
+        }
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas click-to-pluck: map click X position to pluck position
+// ─────────────────────────────────────────────────────────────────────────────
+function handlePluckAt(clientX) {
+    const rect = stringCanvas.getBoundingClientRect();
+    const pos  = Math.max(0.05, Math.min(0.95, (clientX - rect.left) / rect.width));
+    state.pluckPos = pos;
+    // Sync slider and badge
+    document.getElementById('paramPos').value      = pos;
+    document.getElementById('valPos').textContent  = pos.toFixed(2);
+    App.pluck();
+}
+
+stringCanvas.addEventListener('click',      (e) => { if (state.engine) handlePluckAt(e.clientX); });
+stringCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (state.engine) handlePluckAt(e.touches[0].clientX);
+}, { passive: false });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animation loop — runs at ~60 fps regardless of audio state
+// ─────────────────────────────────────────────────────────────────────────────
+const TUNER_ELS = { noteEl: 'tunerNote', centsEl: 'tunerCents', freqEl: 'tunerFreq' };
+const EMPTY_TD  = new Float32Array(FFT_SIZE);          // flat line for scope
+const EMPTY_FD  = new Float32Array(FFT_SIZE / 2);      // silence for spectrum
+
+function loop() {
+    try {
+    [stringCanvas, scopeCanvas, specCanvas].forEach(PhysicsLab.resizeCanvas);
+
+    drawString(state.positions);
+
+    if (state.engine) {
+        const { analyser, timeDomainBuf, frequencyBuf, binHz } = state.engine;
+
+        // ── Oscilloscope: slow-scope ring buffer below 20 Hz; ────────────
+        // AnalyserNode time-domain (185 ms window) at normal frequencies.
+        const f1       = theoreticalFreq(1, state.N, state.k);
+        const slowMode = f1 !== null && f1 < 20;
+        const modeLbl  = document.getElementById('scopeModeLabel');
+
+        if (slowMode) {
+            const slowBuf = getSlowScopeView(f1);
+            PhysicsLab.Scope.draw(scopeCanvas, slowBuf, { color: '#a4f' });
+            if (modeLbl) modeLbl.textContent = 'slow scope';
+        } else {
+            analyser.getFloatTimeDomainData(timeDomainBuf);
+            PhysicsLab.Scope.draw(scopeCanvas, timeDomainBuf);
+            if (modeLbl) modeLbl.textContent = '';
+        }
+
+        // ── Spectrum: auto-zoom to ~10×f₁, minimum 20 FFT bins wide ──────
+        // minFrac ensures at least 20 bars are always visible (20 / (FFT_SIZE/2)).
+        // No large 0.045 floor — that would hide subaudible peaks at the left edge.
+        const minFrac        = 20 / (FFT_SIZE / 2);   // ≈ 0.0049, i.e. ~108 Hz window
+        const displayFraction = f1 && f1 >= 0.5
+            ? Math.min(0.25, Math.max(minFrac, 10 * f1 / (PhysicsLab.SAMPLE_RATE / 2)))
+            : minFrac;
+
+        analyser.getFloatFrequencyData(frequencyBuf);
+        const rawPeak = PhysicsLab.detectPeak(frequencyBuf, binHz);
+        if (rawPeak) {
+            state.smoothedPeak = state.smoothedPeak
+                ? state.smoothedPeak * 0.9 + rawPeak * 0.1
+                : rawPeak;
+        }
+
+        PhysicsLab.Spectrum.draw(specCanvas, frequencyBuf, binHz, theoryMarkers(), {
+            displayFraction,
+            peakLabelId: 'peakLabel',
+            peakHz:      state.smoothedPeak
+        });
+        PhysicsLab.Tuner.update(TUNER_ELS, state.smoothedPeak);
+
+    } else {
+        PhysicsLab.Scope.draw(scopeCanvas, EMPTY_TD);
+        PhysicsLab.Spectrum.draw(specCanvas, EMPTY_FD, PhysicsLab.SAMPLE_RATE / FFT_SIZE, []);
+        PhysicsLab.Tuner.update(TUNER_ELS, null);
+    }
+    } catch (err) {
+        console.error('string_demo loop error:', err);
+    }
+    requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init — wire sliders, then start animation
+// ─────────────────────────────────────────────────────────────────────────────
+function init() {
+    const PL = PhysicsLab;
+    PL.bindSlider('paramN',     'valN',     v => App.setN(v),       v => String(Math.round(Math.pow(10, v))));
+    PL.bindSlider('paramK',     'valK',     v => App.setK(v),       v => Math.pow(10, v).toFixed(3));
+    PL.bindSlider('paramD',     'valD',     v => App.setDamping(v), v => Math.pow(10, v).toFixed(6));
+    PL.bindSlider('paramPos',   'valPos',   v => App.setPluckPos(v),   v => v.toFixed(2));
+    PL.bindSlider('paramWidth', 'valWidth', v => App.setPluckWidth(v), v => v.toFixed(1));
+    PL.bindSlider('paramAmp',   'valAmp',   v => App.setPluckAmp(v),   v => v.toFixed(2));
+    PL.bindSlider('paramVol',   'valVol',   v => App.setVolume(v),     v => `${Math.round(v)}%`);
+
+    updateTheoryDisplay();
+    loop();
+}
+
+init();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
