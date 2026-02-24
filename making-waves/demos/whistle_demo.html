@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Making Waves: Fipple Whistle Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="../lib/physics-lab.js"></script>
+    <style>
+        body { background: #0a0a0c; color: #ececec; }
+
+        .panel {
+            background: #16161a;
+            border: 1px solid #2a2a2e;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            border: 1px solid #2a2a2e;
+        }
+
+        .canvas-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #4f8;         /* green accent */
+            margin-bottom: 4px;
+        }
+
+        .tuner-box {
+            background: #000;
+            border: 1px solid #2a2a2e;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-family: monospace;
+            text-align: center;
+        }
+        .tuner-note  { font-size: 2rem; font-weight: bold; color: #4f8; line-height: 1; }
+        .tuner-cents { font-size: 0.75rem; color: #888; }
+        .tuner-freq  { font-size: 0.85rem; color: #fff; margin-top: 2px; }
+
+        .val-badge {
+            background: #222;
+            color: #fff;
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 1px 6px;
+            border-radius: 4px;
+            float: right;
+        }
+
+        label { font-size: 0.75rem; color: #aaa; text-transform: uppercase; }
+        input[type="range"] { accent-color: #4f8; width: 100%; }
+
+        h5 {
+            font-size: 0.8rem;
+            color: #4f8;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid #2a2a2e;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+        }
+
+        /* Mode selector buttons */
+        .mode-btn {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+        }
+        .mode-btn.active {
+            background: #4f8;
+            border-color: #4f8;
+            color: #000;
+        }
+
+        /* Panel toggle buttons */
+        .pnl-toggle {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            color: #4f8;
+            border-color: #4f8;
+        }
+        .pnl-toggle.active {
+            background: #4f8;
+            color: #000;
+        }
+
+        #btnAudio   { min-width: 120px; }
+        #btnBlow    { width: 100%; cursor: pointer; user-select: none; }
+
+        .theory-row { font-family: monospace; font-size: 0.8rem; color: #aaa; line-height: 1.8; }
+        .theory-row span { color: #fff; }
+
+        .mode-section { display: none; }
+        .mode-section.visible { display: block; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid py-3 px-4">
+
+    <!-- ── Header ────────────────────────────────────────────────────────── -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0" style="font-weight:300;">
+            Making Waves &nbsp;<span style="opacity:0.4">|</span>&nbsp; Fipple Whistle
+        </h4>
+        <div class="tuner-box" style="min-width:160px;">
+            <div id="tunerNote"  class="tuner-note">--</div>
+            <div id="tunerCents" class="tuner-cents">--</div>
+            <div id="tunerFreq"  class="tuner-freq">0.00 Hz</div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <!-- ── Left: canvases ──────────────────────────────────────────── -->
+        <div class="col-lg-8 d-flex flex-column gap-3">
+
+            <!-- Panel visibility toggles -->
+            <div class="d-flex gap-2">
+                <span style="font-size:0.7rem; color:#555; align-self:center; text-transform:uppercase; letter-spacing:1px;">Show:</span>
+                <button id="btnTubePnl"   class="btn btn-outline-secondary pnl-toggle active" onclick="App.togglePanel('tube')">Tube</button>
+                <button id="btnStringPnl" class="btn btn-outline-secondary pnl-toggle active" onclick="App.togglePanel('string')">String</button>
+                <button id="btnStripsPnl" class="btn btn-outline-secondary pnl-toggle active" onclick="App.togglePanel('strips')">p⁺/p⁻</button>
+            </div>
+
+            <!-- Tube — Bulge/Pinch View -->
+            <div id="tubePnl" class="panel">
+                <div class="canvas-label">Acoustic Tube — Pressure Bulge / Pinch</div>
+                <canvas id="tubeCanvas" height="200"></canvas>
+                <div class="d-flex justify-content-between mt-1 px-1" style="font-size:0.75rem; color:#888;">
+                    <span>Mouthpiece</span>
+                    <span id="tubeJunctLabel">Junction (J=24)</span>
+                    <span style="font-style:italic;">Open radiation zone</span>
+                </div>
+            </div>
+
+            <!-- String — Displacement Rope View -->
+            <div id="stringPnl" class="panel">
+                <div class="canvas-label">String — Displacement View</div>
+                <canvas id="stringCanvas" height="180"></canvas>
+            </div>
+
+            <!-- Strips — p⁺ and p⁻ -->
+            <div id="stripsPnl" class="panel">
+                <div class="canvas-label">Wave Components p⁺ (rightward) / p⁻ (leftward)</div>
+                <canvas id="stripsCanvas" height="130"></canvas>
+            </div>
+
+            <!-- Oscilloscope -->
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Oscilloscope — Time Domain</div>
+                    <span id="scopeModeLabel" style="font-size:0.65rem; color:#8f8; font-family:monospace;"></span>
+                </div>
+                <canvas id="scopeCanvas" height="110"></canvas>
+            </div>
+
+            <!-- Spectrum -->
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Spectrum — Frequency Domain</div>
+                    <div id="peakLabel" style="font-family:monospace; font-size:0.75rem; color:#fff;"></div>
+                </div>
+                <canvas id="specCanvas" height="140"></canvas>
+            </div>
+
+        </div>
+
+        <!-- ── Right: controls ─────────────────────────────────────────── -->
+        <div class="col-lg-4">
+            <div class="panel h-100 d-flex flex-column gap-3">
+
+                <!-- Audio + Pulse -->
+                <div class="d-flex gap-2">
+                    <button id="btnAudio" class="btn btn-outline-danger flex-grow-1"
+                            onclick="App.toggleAudio()">Start Audio</button>
+                    <button class="btn btn-outline-secondary flex-grow-1"
+                            onclick="App.firePulse()">Pulse</button>
+                    <button class="btn btn-outline-secondary"
+                            onclick="App.clear()" title="Zero the field (parameters unchanged)">Clear</button>
+                </div>
+
+                <!-- Hold to Blow (manual mode only) -->
+                <div id="manualBlowDiv" style="display:none;">
+                    <button id="btnBlow" class="btn btn-outline-warning">Hold to Blow</button>
+                </div>
+
+                <!-- ── Mode selector ─────────────────────────────────── -->
+                <div>
+                    <h5>Excitation Mode</h5>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button data-mode="impulse" class="btn btn-outline-secondary mode-btn active"
+                                onclick="App.setMode('impulse')">Impulse</button>
+                        <button data-mode="sweep"   class="btn btn-outline-secondary mode-btn"
+                                onclick="App.setMode('sweep')">Sweep</button>
+                        <button data-mode="fipple"  class="btn btn-outline-secondary mode-btn"
+                                onclick="App.setMode('fipple')">Fipple</button>
+                        <button data-mode="sine"    class="btn btn-outline-secondary mode-btn"
+                                onclick="App.setMode('sine')">Sine</button>
+                        <button data-mode="manual"  class="btn btn-outline-secondary mode-btn"
+                                onclick="App.setMode('manual')">Manual</button>
+                    </div>
+
+                    <!-- Impulse controls -->
+                    <div id="ctrlImpulse" class="mt-2 mode-section visible">
+                        <label>Pulse amplitude <span id="valPulseAmp" class="val-badge">1.00</span></label>
+                        <input type="range" id="paramPulseAmp" min="0.1" max="3.0" step="0.1" value="1.0">
+                    </div>
+
+                    <!-- Fipple controls -->
+                    <div id="ctrlFipple" class="mt-2 mode-section">
+                        <label>Breath gain (G) <span id="valFippleGain" class="val-badge">0.0010</span></label>
+                        <input type="range" id="paramFippleGain" min="-3" max="-1.3" step="0.05" value="-3.00">
+                        <label class="mt-2">Saturation (ε) <span id="valFippleEps" class="val-badge">0.0005</span></label>
+                        <input type="range" id="paramFippleEps" min="-4" max="-2" step="0.05" value="-3.30">
+                    </div>
+
+                    <!-- Sweep controls -->
+                    <div id="ctrlSweep" class="mt-2 mode-section">
+                        <label>f₀ (start) Hz <span id="valSweepF0" class="val-badge">200</span></label>
+                        <input type="range" id="paramSweepF0" min="20" max="1000" step="1" value="200">
+                        <label class="mt-2">f₁ (end) Hz <span id="valSweepF1" class="val-badge">600</span></label>
+                        <input type="range" id="paramSweepF1" min="20" max="1000" step="1" value="600">
+                        <label class="mt-2">Duration (s) <span id="valSweepDur" class="val-badge">4.0</span></label>
+                        <input type="range" id="paramSweepDur" min="0.5" max="10" step="0.5" value="4.0">
+                    </div>
+
+                    <!-- Sine controls -->
+                    <div id="ctrlSine" class="mt-2 mode-section">
+                        <label>Frequency (Hz) <span id="valSineFreq" class="val-badge">440</span></label>
+                        <input type="range" id="paramSineFreq" min="20" max="1000" step="1" value="440">
+                        <label class="mt-2">Amplitude <span id="valSineAmp" class="val-badge">0.080</span></label>
+                        <input type="range" id="paramSineAmp" min="0.01" max="0.5" step="0.01" value="0.08">
+                    </div>
+
+                    <!-- Manual: no controls (just the Hold button above) -->
+                    <div id="ctrlManual" class="mt-2 mode-section">
+                        <div style="font-size:0.75rem; color:#666; font-family:monospace;">
+                            Press and hold "Hold to Blow" to inject pressure.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Tube ────────────────────────────────────────────── -->
+                <div>
+                    <h5>Tube</h5>
+
+                    <label>Resolution (N) <span id="valN" class="val-badge">60</span></label>
+                    <input type="range" id="paramN" min="0.903" max="2.301" step="0.005" value="1.778">
+
+                    <label class="mt-2">Stiffness k₁ <span id="valK" class="val-badge">0.200</span></label>
+                    <input type="range" id="paramK" min="-3" max="-0.604" step="0.01" value="-0.699">
+
+                    <label class="mt-2">Damping <span id="valD" class="val-badge">0.000200</span></label>
+                    <input type="range" id="paramD" min="-5" max="-2.3" step="0.05" value="-3.699">
+
+                    <label class="mt-2">Slow Motion <span id="valSlowMo" class="val-badge">1×</span></label>
+                    <input type="range" id="paramSlowMo" min="0" max="3" step="0.01" value="0">
+                    <div id="slowMoNote" style="font-size:0.7rem; font-family:monospace; color:#888; min-height:1.1em;"></div>
+                </div>
+
+                <!-- ── End Termination ────────────────────────────────── -->
+                <div>
+                    <h5>End Termination</h5>
+
+                    <label>Tube Length <span id="valJunc" class="val-badge">0.40</span></label>
+                    <input type="range" id="paramJunc" min="0.10" max="0.90" step="0.01" value="0.40">
+
+                    <label class="mt-2">Reflection R <span id="valR" class="val-badge">−0.90</span></label>
+                    <input type="range" id="paramR" min="-1.00" max="1.00" step="0.01" value="-0.90">
+                    <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#555; margin-top:2px;">
+                        <span>−1 open end</span><span>0 absorbing</span><span>+1 closed</span>
+                    </div>
+                </div>
+
+                <!-- ── Audio ─────────────────────────────────────────── -->
+                <div>
+                    <h5>Audio Output</h5>
+                    <label>Volume <span id="valVol" class="val-badge">50%</span></label>
+                    <input type="range" id="paramVol" min="0" max="100" step="1" value="50">
+                </div>
+
+                <!-- ── Theory ─────────────────────────────────────────── -->
+                <div class="mt-auto">
+                    <h5>Theory</h5>
+                    <div class="theory-row">
+                        <div>f₁ (theory): <span id="theoryF1">—</span></div>
+                        <div>f₂ (theory): <span id="theoryF3">—</span></div>
+                        <div>f₃ (theory): <span id="theoryF5">—</span></div>
+                    </div>
+                    <div id="harmonicNote" class="mt-1" style="font-size:0.75rem; font-family:monospace; color:#888;"></div>
+                    <div class="mt-2" style="font-size:0.7rem; color:#555;">
+                        sin(qJ) = R·sin(q(J−1)) &nbsp;→&nbsp;
+                        f<sub>n</sub> = (f<sub>s</sub>/π) arcsin(√k₁·sin(q<sub>n</sub>/2))
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+const FFT_SIZE = 8192;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {
+    N:            60,
+    k1:           0.20,
+    damping:      0.0002,
+    juncFrac:     0.40,
+    R:           -0.90,
+    pulseAmp:     1.0,
+    fippleGain:   0.001,
+    fippleEps:    0.0005,
+    sweepF0:      200,
+    sweepF1:      600,
+    sweepDur:     4.0,
+    sineFreq:     440,
+    sineAmp:      0.08,
+    volume:       0.50,
+    mode:         'impulse',
+    subSteps:     1,
+
+    engine:       null,
+
+    // Latest snapshot from worklet (tube segment only, length J)
+    J:            24,
+    snapZ:        new Float32Array(24),
+    snapPlus:     new Float32Array(24),
+    snapMinus:    new Float32Array(24),
+
+    // Segment-2 radiation display buffer (main thread only, length N-J)
+    seg2buf:      new Float32Array(36), // 60-24
+
+    // Peak envelope tracker for tube (segment 1)
+    envelope:     new PhysicsLab.EnvelopeTracker(24, 0.9985),
+
+    // Smoothed peak frequency for tuner
+    smoothedPeak: null,
+
+    // Panel visibility
+    panelVisible: { tube: true, string: true, strips: true }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Theory: exact discrete dispersion, closed-open (R≈-1) modes
+//   f_n = (fs/π) · arcsin(√k1 · sin((2n−1)π / (4·J)))   for n = 1, 3, 5 …
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Find the frequency of the mode-th resonance of the Verlet ghost-node model.
+ *
+ * Exact eigenvalue equation (standing wave z[i]=sin(qi), z[0]=0, z[J]=R·z[J-1]):
+ *   g(q) = sin(qJ) − R·sin(q(J−1)) = 0,   q ∈ (0, π)
+ *
+ * Frequencies via Verlet dispersion relation:
+ *   f = (fs/π)·arcsin(√k₁·|sin(q/2)|)
+ *
+ * Mode structure:
+ *   R = −1: both ends are displacement nodes → all harmonics n=1,2,3,...
+ *   R = +1: one node (left) and one antinode (right) → odd harmonics n=1,3,5,...
+ */
+function theoreticalFreq(mode, J, k1, R, fs = PhysicsLab.SAMPLE_RATE) {
+    if (J < 2) return null;
+    const g = q => Math.sin(q * J) - R * Math.sin(q * (J - 1));
+    const N_SCAN = 2000;
+    let found = 0;
+    let prevG  = g(1e-9);
+    for (let i = 1; i <= N_SCAN; i++) {
+        const q    = (i / N_SCAN) * (Math.PI - 1e-9);
+        const curG = g(q);
+        if (prevG * curG < 0) {
+            found++;
+            if (found === mode) {
+                // Bisect to 52 iterations (~10⁻¹⁵ accuracy)
+                let lo = (i - 1) / N_SCAN * (Math.PI - 1e-9);
+                let hi = q;
+                for (let it = 0; it < 52; it++) {
+                    const mid = 0.5 * (lo + hi);
+                    if (g(lo) * g(mid) <= 0) hi = mid; else lo = mid;
+                }
+                const qRoot = 0.5 * (lo + hi);
+                const arg = Math.sqrt(k1) * Math.abs(Math.sin(qRoot / 2));
+                if (arg >= 1.0) return null;
+                return (fs / Math.PI) * Math.asin(arg);
+            }
+        }
+        prevG = curG;
+    }
+    return null;
+}
+
+function updateTheoryDisplay() {
+    const { J, k1, R } = state;
+    const fs = PhysicsLab.SAMPLE_RATE / state.subSteps;  // effective rate with sub-stepping
+    // Always show the first 3 actual modes (labels f₁,f₂,f₃ regardless of R)
+    const ids = ['theoryF1', 'theoryF3', 'theoryF5'];
+    for (let n = 1; n <= 3; n++) {
+        const f = theoreticalFreq(n, J, k1, R, fs);
+        document.getElementById(ids[n - 1]).textContent =
+            f !== null ? `${f.toFixed(1)} Hz` : '—';
+    }
+    document.getElementById('tubeJunctLabel').textContent = `Junction (J=${J})`;
+
+    // Harmonic structure note
+    // R=−1: z[0]=0 AND z[J]=−z[J-1] both give displacement nodes → all harmonics
+    // R=+1: z[0]=0 node, z[J]=z[J-1] antinode → odd harmonics only
+    const noteEl = document.getElementById('harmonicNote');
+    if (R < -0.5) {
+        noteEl.textContent = 'R ≈ −1: all harmonics (flute / recorder — both ends open)';
+    } else if (R > 0.5) {
+        noteEl.textContent = 'R ≈ +1: odd harmonics only (clarinet — closed far end)';
+    } else if (Math.abs(R) < 0.1) {
+        noteEl.textContent = 'R ≈ 0: anechoic — weak resonance, all harmonics';
+    } else {
+        noteEl.textContent = `R = ${R.toFixed(2)}: mixed — harmonic structure shifts with R`;
+    }
+}
+
+function theoryMarkers() {
+    const colors = ['#ff4', '#f84', '#4f4'];
+    const fs = PhysicsLab.SAMPLE_RATE / state.subSteps;
+    return [1, 2, 3].map((n, i) => ({
+        freq:  theoreticalFreq(n, state.J, state.k1, state.R, fs),
+        label: `f${n}`,
+        color: colors[i]
+    }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Segment-2 radiation display buffer management
+// ─────────────────────────────────────────────────────────────────────────────
+function updateSeg2buf(pPlus) {
+    const buf   = state.seg2buf;
+    const len   = buf.length;
+    const R     = state.R;
+    const decay = 0.82;  // per-snapshot exponential fade
+
+    // Transmitted fraction at junction: amplitude factor (1+R)
+    const inject = (1.0 + R) * (pPlus.length > 0 ? pPlus[pPlus.length - 1] : 0);
+
+    // Shift right (propagate rightward)
+    for (let i = len - 1; i > 0; i--) {
+        buf[i] = buf[i - 1] * decay;
+    }
+    buf[0] = inject;
+}
+
+function resizeSeg2buf() {
+    // Called when N or J changes
+    state.seg2buf = new Float32Array(Math.max(1, state.N - state.J));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas setup
+// ─────────────────────────────────────────────────────────────────────────────
+const tubeCanvas   = document.getElementById('tubeCanvas');
+const stringCanvas = document.getElementById('stringCanvas');
+const stripsCanvas = document.getElementById('stripsCanvas');
+const scopeCanvas  = document.getElementById('scopeCanvas');
+const specCanvas   = document.getElementById('specCanvas');
+
+const tubeCtx   = tubeCanvas.getContext('2d');
+const stringCtx = stringCanvas.getContext('2d');
+const stripsCtx = stripsCanvas.getContext('2d');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// drawTube — bulge/pinch pressure visualization
+//
+// Tube spans x = 0 to xJ (segment 1, nodes 0..J-1).
+// Radiation zone spans x = xJ to W (segment 2, seg2buf).
+// Half-width of tube at node i: hw = baseHW + scale * z[i]
+//   (positive z → higher pressure → bulge / wider tube)
+// ─────────────────────────────────────────────────────────────────────────────
+function drawTube(z, seg2buf) {
+    const W = tubeCanvas.width;
+    const H = tubeCanvas.height;
+    const J = z.length;
+    const R = state.R;
+
+    tubeCtx.fillStyle = '#000';
+    tubeCtx.fillRect(0, 0, W, H);
+
+    if (J < 2) return;
+
+    const jFrac  = state.juncFrac;
+    const xJ     = W * jFrac;           // x-coordinate of junction
+    const baseHW = H * 0.28;            // equilibrium half-width
+    const scale  = H * 0.16;            // displacement-to-pixel scaling
+
+    // Find max amplitude for auto-scale (avoid division by zero)
+    let maxAbs = 0.001;
+    for (let i = 0; i < J; i++) maxAbs = Math.max(maxAbs, Math.abs(z[i]));
+    for (let i = 0; i < seg2buf.length; i++) maxAbs = Math.max(maxAbs, Math.abs(seg2buf[i]));
+    const dynScale = Math.min(scale, scale / maxAbs); // scale so max fills ≈ 16% H
+
+    // ── Draw tube walls (filled polygon) ───────────────────────────────
+
+    // Segment 1 top and bottom walls
+    const seg1Points = [];
+    for (let i = 0; i < J; i++) {
+        const x  = (i / (J - 1)) * xJ;
+        const hw = baseHW + dynScale * z[i];
+        seg1Points.push({ x, topY: H / 2 - hw, botY: H / 2 + hw });
+    }
+
+    // Segment 2 top and bottom from seg2buf
+    const seg2len = seg2buf.length;
+    const seg2Points = [];
+    for (let i = 0; i < seg2len; i++) {
+        const x  = xJ + (i / Math.max(seg2len - 1, 1)) * (W - xJ);
+        const hw = baseHW + dynScale * seg2buf[i];
+        seg2Points.push({ x, topY: H / 2 - hw, botY: H / 2 + hw });
+    }
+
+    // Fill segment 1 interior (blue tint)
+    tubeCtx.beginPath();
+    seg1Points.forEach((p, i) => {
+        if (i === 0) tubeCtx.moveTo(p.x, p.topY);
+        else         tubeCtx.lineTo(p.x, p.topY);
+    });
+    for (let i = seg1Points.length - 1; i >= 0; i--) {
+        tubeCtx.lineTo(seg1Points[i].x, seg1Points[i].botY);
+    }
+    tubeCtx.closePath();
+    tubeCtx.fillStyle = 'rgba(30, 100, 200, 0.22)';
+    tubeCtx.fill();
+
+    // Fill segment 2 interior (amber tint, fading alpha toward right)
+    if (seg2Points.length >= 2) {
+        const grad = tubeCtx.createLinearGradient(xJ, 0, W, 0);
+        grad.addColorStop(0, 'rgba(200, 140, 40, 0.22)');
+        grad.addColorStop(1, 'rgba(200, 140, 40, 0.00)');
+
+        tubeCtx.beginPath();
+        seg2Points.forEach((p, i) => {
+            if (i === 0) tubeCtx.moveTo(p.x, p.topY);
+            else         tubeCtx.lineTo(p.x, p.topY);
+        });
+        for (let i = seg2Points.length - 1; i >= 0; i--) {
+            tubeCtx.lineTo(seg2Points[i].x, seg2Points[i].botY);
+        }
+        tubeCtx.closePath();
+        tubeCtx.fillStyle = grad;
+        tubeCtx.fill();
+    }
+
+    // Equilibrium tube outline (dashed, segment 1)
+    tubeCtx.strokeStyle = '#334';
+    tubeCtx.lineWidth   = 1;
+    tubeCtx.setLineDash([6, 4]);
+    tubeCtx.beginPath();
+    tubeCtx.moveTo(0, H / 2 - baseHW);
+    tubeCtx.lineTo(xJ, H / 2 - baseHW);
+    tubeCtx.stroke();
+    tubeCtx.beginPath();
+    tubeCtx.moveTo(0, H / 2 + baseHW);
+    tubeCtx.lineTo(xJ, H / 2 + baseHW);
+    tubeCtx.stroke();
+    tubeCtx.setLineDash([]);
+
+    // Top wall edge (segment 1, solid, blue)
+    tubeCtx.strokeStyle = 'rgba(80, 160, 255, 0.75)';
+    tubeCtx.lineWidth   = 1.5;
+    tubeCtx.beginPath();
+    seg1Points.forEach((p, i) => {
+        if (i === 0) tubeCtx.moveTo(p.x, p.topY);
+        else         tubeCtx.lineTo(p.x, p.topY);
+    });
+    tubeCtx.stroke();
+
+    // Bottom wall edge (segment 1, solid, blue)
+    tubeCtx.beginPath();
+    seg1Points.forEach((p, i) => {
+        if (i === 0) tubeCtx.moveTo(p.x, p.botY);
+        else         tubeCtx.lineTo(p.x, p.botY);
+    });
+    tubeCtx.stroke();
+
+    // Segment 2 top and bottom walls (fading amber)
+    if (seg2Points.length >= 2) {
+        const gradTop = tubeCtx.createLinearGradient(xJ, 0, W, 0);
+        gradTop.addColorStop(0, 'rgba(200, 140, 40, 0.70)');
+        gradTop.addColorStop(1, 'rgba(200, 140, 40, 0.00)');
+
+        tubeCtx.strokeStyle = gradTop;
+        tubeCtx.lineWidth   = 1.5;
+        tubeCtx.beginPath();
+        seg2Points.forEach((p, i) => {
+            if (i === 0) tubeCtx.moveTo(p.x, p.topY);
+            else         tubeCtx.lineTo(p.x, p.topY);
+        });
+        tubeCtx.stroke();
+        tubeCtx.beginPath();
+        seg2Points.forEach((p, i) => {
+            if (i === 0) tubeCtx.moveTo(p.x, p.botY);
+            else         tubeCtx.lineTo(p.x, p.botY);
+        });
+        tubeCtx.stroke();
+    }
+
+    // Closed-end wall (left, solid orange dot)
+    tubeCtx.fillStyle = '#f84';
+    tubeCtx.fillRect(0, H / 2 - baseHW - 3, 4, (baseHW + 3) * 2);
+
+    // Junction line (dotted, green)
+    tubeCtx.strokeStyle = 'rgba(64, 255, 128, 0.5)';
+    tubeCtx.lineWidth   = 1.5;
+    tubeCtx.setLineDash([4, 4]);
+    tubeCtx.beginPath();
+    tubeCtx.moveTo(xJ, H / 2 - baseHW - 8);
+    tubeCtx.lineTo(xJ, H / 2 + baseHW + 8);
+    tubeCtx.stroke();
+    tubeCtx.setLineDash([]);
+
+    // Right edge (dotted — open end / radiation)
+    tubeCtx.strokeStyle = 'rgba(200, 140, 40, 0.35)';
+    tubeCtx.lineWidth   = 1;
+    tubeCtx.setLineDash([3, 5]);
+    tubeCtx.beginPath();
+    tubeCtx.moveTo(W - 1, H / 2 - baseHW - 8);
+    tubeCtx.lineTo(W - 1, H / 2 + baseHW + 8);
+    tubeCtx.stroke();
+    tubeCtx.setLineDash([]);
+
+    // R label near junction
+    tubeCtx.fillStyle = '#8f8';
+    tubeCtx.font      = '12px monospace';
+    tubeCtx.textAlign = 'center';
+    tubeCtx.fillText(`R=${R.toFixed(2)}`, xJ, H / 2 - baseHW - 12);
+    tubeCtx.textAlign = 'left';
+
+    // Centre equilibrium line
+    tubeCtx.strokeStyle = '#1a3';
+    tubeCtx.lineWidth   = 0.5;
+    tubeCtx.beginPath();
+    tubeCtx.moveTo(0, H / 2);
+    tubeCtx.lineTo(xJ, H / 2);
+    tubeCtx.stroke();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// drawString — classical rope view with envelope
+// ─────────────────────────────────────────────────────────────────────────────
+function drawString(z, seg2buf) {
+    const W = stringCanvas.width;
+    const H = stringCanvas.height;
+    const J = z.length;
+
+    stringCtx.fillStyle = '#000';
+    stringCtx.fillRect(0, 0, W, H);
+
+    if (J < 2) return;
+
+    const jFrac = state.juncFrac;
+    const xJ    = W * jFrac;
+
+    // Auto-scale from envelope peak
+    const peak = state.envelope.peak;
+    let maxPeak = 0.001;
+    for (let i = 0; i < J; i++) maxPeak = Math.max(maxPeak, peak[i]);
+    for (let i = 0; i < seg2buf.length; i++) maxPeak = Math.max(maxPeak, Math.abs(seg2buf[i]));
+    const scale = (H * 0.40) / maxPeak;
+
+    // Equilibrium line
+    stringCtx.strokeStyle = '#1a1a1a';
+    stringCtx.lineWidth   = 1;
+    stringCtx.beginPath();
+    stringCtx.moveTo(0, H / 2);
+    stringCtx.lineTo(W, H / 2);
+    stringCtx.stroke();
+
+    // ── Segment 1: envelope fill (blue tint) ─────────────────────────────
+    // Top edge + bottom edge → filled lens
+    stringCtx.beginPath();
+    for (let i = 0; i < J; i++) {
+        const x = (i / (J - 1)) * xJ;
+        const y = H / 2 - peak[i] * scale;
+        if (i === 0) stringCtx.moveTo(x, y);
+        else         stringCtx.lineTo(x, y);
+    }
+    for (let i = J - 1; i >= 0; i--) {
+        const x = (i / (J - 1)) * xJ;
+        const y = H / 2 + peak[i] * scale;
+        stringCtx.lineTo(x, y);
+    }
+    stringCtx.closePath();
+    stringCtx.fillStyle = 'rgba(40, 130, 255, 0.13)';
+    stringCtx.fill();
+
+    // Envelope top & bottom edges (blue)
+    for (const sign of [1, -1]) {
+        stringCtx.strokeStyle = 'rgba(60, 150, 255, 0.50)';
+        stringCtx.lineWidth   = 1;
+        stringCtx.beginPath();
+        for (let i = 0; i < J; i++) {
+            const x = (i / (J - 1)) * xJ;
+            const y = H / 2 - sign * peak[i] * scale;
+            if (i === 0) stringCtx.moveTo(x, y);
+            else         stringCtx.lineTo(x, y);
+        }
+        stringCtx.stroke();
+    }
+
+    // Instantaneous segment-1 string (bright white)
+    stringCtx.strokeStyle = '#cef';
+    stringCtx.lineWidth   = 1.5;
+    stringCtx.beginPath();
+    for (let i = 0; i < J; i++) {
+        const x = (i / (J - 1)) * xJ;
+        const y = H / 2 - z[i] * scale;
+        if (i === 0) stringCtx.moveTo(x, y);
+        else         stringCtx.lineTo(x, y);
+    }
+    stringCtx.stroke();
+
+    // ── Junction separator (dashed green line) ───────────────────────────
+    stringCtx.strokeStyle = 'rgba(64, 255, 128, 0.4)';
+    stringCtx.lineWidth   = 1;
+    stringCtx.setLineDash([4, 4]);
+    stringCtx.beginPath();
+    stringCtx.moveTo(xJ, 0);
+    stringCtx.lineTo(xJ, H);
+    stringCtx.stroke();
+    stringCtx.setLineDash([]);
+
+    // ── Segment 2: radiation zone in amber (fading seg2buf) ──────────────
+    const s2len = seg2buf.length;
+    if (s2len >= 2) {
+        for (let i = 0; i < s2len - 1; i++) {
+            const alpha = 0.8 * (1.0 - i / s2len); // fade rightward
+            const x0 = xJ + (i / (s2len - 1)) * (W - xJ);
+            const x1 = xJ + ((i + 1) / (s2len - 1)) * (W - xJ);
+            const y0 = H / 2 - seg2buf[i] * scale;
+            const y1 = H / 2 - seg2buf[i + 1] * scale;
+            stringCtx.strokeStyle = `rgba(210, 160, 40, ${alpha})`;
+            stringCtx.lineWidth   = 1.5;
+            stringCtx.beginPath();
+            stringCtx.moveTo(x0, y0);
+            stringCtx.lineTo(x1, y1);
+            stringCtx.stroke();
+        }
+    }
+
+    // Labels
+    stringCtx.fillStyle = 'rgba(60, 150, 255, 0.9)';
+    stringCtx.font      = '11px monospace';
+    stringCtx.fillText('Tube', 4, H - 6);
+    stringCtx.fillStyle = 'rgba(210, 160, 40, 0.9)';
+    stringCtx.fillText('Radiation', xJ + 4, H - 6);
+
+    // Endpoint markers
+    stringCtx.fillStyle = '#f84';
+    stringCtx.beginPath();
+    stringCtx.arc(0, H / 2, 5, 0, Math.PI * 2);
+    stringCtx.fill();
+
+    // Open right boundary marker (circle outline only — open end)
+    stringCtx.strokeStyle = 'rgba(210, 160, 40, 0.6)';
+    stringCtx.lineWidth   = 1.5;
+    stringCtx.setLineDash([2, 3]);
+    stringCtx.beginPath();
+    stringCtx.moveTo(W - 1, H / 2 - H * 0.3);
+    stringCtx.lineTo(W - 1, H / 2 + H * 0.3);
+    stringCtx.stroke();
+    stringCtx.setLineDash([]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// drawStrips — p⁺ (rightward) top half, p⁻ (leftward) bottom half
+// ─────────────────────────────────────────────────────────────────────────────
+function drawStrips(pPlus, pMinus) {
+    const W  = stripsCanvas.width;
+    const H  = stripsCanvas.height;
+    const J  = pPlus.length;
+    const hH = H / 2;
+    const jFrac = state.juncFrac;
+    const xJ    = W * jFrac;
+
+    stripsCtx.fillStyle = '#000';
+    stripsCtx.fillRect(0, 0, W, H);
+
+    if (J < 2) return;
+
+    // Auto-scale both strips together
+    let maxAbs = 0.001;
+    for (let i = 0; i < J; i++) {
+        maxAbs = Math.max(maxAbs, Math.abs(pPlus[i]), Math.abs(pMinus[i]));
+    }
+    const scale = (hH * 0.80) / maxAbs;
+
+    // Divider line between top/bottom strips
+    stripsCtx.strokeStyle = '#222';
+    stripsCtx.lineWidth   = 1;
+    stripsCtx.beginPath();
+    stripsCtx.moveTo(0, hH);
+    stripsCtx.lineTo(W, hH);
+    stripsCtx.stroke();
+
+    // Junction separator
+    stripsCtx.strokeStyle = 'rgba(64, 255, 128, 0.3)';
+    stripsCtx.lineWidth   = 1;
+    stripsCtx.setLineDash([3, 4]);
+    stripsCtx.beginPath();
+    stripsCtx.moveTo(xJ, 0);
+    stripsCtx.lineTo(xJ, H);
+    stripsCtx.stroke();
+    stripsCtx.setLineDash([]);
+
+    // Labels
+    stripsCtx.font      = '11px monospace';
+    stripsCtx.fillStyle = 'rgba(60, 200, 100, 0.9)';
+    stripsCtx.fillText('p⁺ →', 4, 12);
+    stripsCtx.fillStyle = 'rgba(80, 140, 255, 0.9)';
+    stripsCtx.fillText('← p⁻', 4, hH + 12);
+
+    function drawWave(data, yCenter, color, fillColor) {
+        // Filled waveform
+        stripsCtx.beginPath();
+        stripsCtx.moveTo(0, yCenter);
+        for (let i = 0; i < J; i++) {
+            const x = (i / (J - 1)) * xJ;
+            const y = yCenter - data[i] * scale;
+            stripsCtx.lineTo(x, y);
+        }
+        stripsCtx.lineTo(xJ, yCenter);
+        stripsCtx.closePath();
+        stripsCtx.fillStyle = fillColor;
+        stripsCtx.fill();
+
+        // Waveform line
+        stripsCtx.strokeStyle = color;
+        stripsCtx.lineWidth   = 1.5;
+        stripsCtx.beginPath();
+        for (let i = 0; i < J; i++) {
+            const x = (i / (J - 1)) * xJ;
+            const y = yCenter - data[i] * scale;
+            if (i === 0) stripsCtx.moveTo(x, y);
+            else         stripsCtx.lineTo(x, y);
+        }
+        stripsCtx.stroke();
+
+        // Equilibrium line
+        stripsCtx.strokeStyle = '#2a2a2a';
+        stripsCtx.lineWidth   = 1;
+        stripsCtx.beginPath();
+        stripsCtx.moveTo(0, yCenter);
+        stripsCtx.lineTo(xJ, yCenter);
+        stripsCtx.stroke();
+    }
+
+    drawWave(pPlus,  hH * 0.5, 'rgba(60, 220, 100, 0.9)',  'rgba(60, 220, 100, 0.12)');
+    drawWave(pMinus, hH * 1.5, 'rgba(80, 140, 255, 0.9)', 'rgba(80, 140, 255, 0.12)');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App — audio lifecycle, parameter management
+// ─────────────────────────────────────────────────────────────────────────────
+const App = {
+
+    async toggleAudio() {
+        const btn    = document.getElementById('btnAudio');
+        const action = PhysicsLab.AudioEngine.cycleButton(
+            state.engine?.audioCtx ?? null, btn
+        );
+        if (action === 'create') {
+            await this._initAudio();
+        }
+    },
+
+    async _initAudio() {
+        state.engine = await PhysicsLab.AudioEngine.create({
+            workletUrl:    'whistle-worklet.js',
+            processorName: 'whistle-processor',
+            parameterData: {
+                stiffness:   state.k1,
+                reflectionR: state.R,
+                damping:     state.damping
+            },
+            fftSize:     FFT_SIZE,
+            initialGain: state.volume
+        });
+
+        // Reconcile gain with slow-motion mute state
+        const targetGain = state.subSteps > 20 ? 0 : state.volume;
+        state.engine.gainNode.gain.value = targetGain;
+
+        // Set initial junction and mode
+        const wn = state.engine.workletNode;
+        wn.port.postMessage({ type: 'setJunction', frac: state.juncFrac });
+        wn.port.postMessage({ type: 'setMode',     mode: state.mode });
+
+        wn.port.onmessage = (e) => {
+            if (e.data.type !== 'snapshot') return;
+            const { z, pPlus, pMinus } = e.data;
+
+            state.J        = z.length;   // may change if setJunction was sent
+            state.snapZ    = z;
+            state.snapPlus = pPlus;
+            state.snapMinus = pMinus;
+
+            // Update envelope tracker
+            state.envelope.update(z);
+
+            // Update segment-2 display buffer
+            if (state.seg2buf.length !== state.N - state.J) resizeSeg2buf();
+            updateSeg2buf(pPlus);
+        };
+    },
+
+    firePulse() {
+        state.engine?.workletNode.port.postMessage({
+            type: 'pulse',
+            amp:  state.pulseAmp
+        });
+    },
+
+    clear() {
+        state.engine?.workletNode.port.postMessage({ type: 'clear' });
+        // Zero the local display state too so canvases go quiet immediately
+        state.snapZ.fill(0);
+        state.snapPlus.fill(0);
+        state.snapMinus.fill(0);
+        state.seg2buf.fill(0);
+        state.envelope.resize(state.J); // clears peak array
+    },
+
+    setMode(mode) {
+        state.mode = mode;
+
+        // Update mode buttons
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Show/hide mode-specific control sections
+        ['impulse', 'fipple', 'sweep', 'sine', 'manual'].forEach(m => {
+            const el = document.getElementById(`ctrl${m.charAt(0).toUpperCase() + m.slice(1)}`);
+            if (el) el.classList.toggle('visible', m === mode);
+        });
+
+        // Show/hide manual blow button
+        const blowDiv = document.getElementById('manualBlowDiv');
+        blowDiv.style.display = mode === 'manual' ? 'block' : 'none';
+
+        state.engine?.workletNode.port.postMessage({ type: 'setMode', mode });
+
+        // Resync fipple params each time fipple mode is activated, so the
+        // worklet always agrees with the current slider positions.
+        if (mode === 'fipple') {
+            state.engine?.workletNode.port.postMessage({
+                type: 'setFipple', gain: state.fippleGain, eps: state.fippleEps
+            });
+        }
+    },
+
+    togglePanel(name) {
+        const divId = { tube: 'tubePnl', string: 'stringPnl', strips: 'stripsPnl' }[name];
+        const btnId = { tube: 'btnTubePnl', string: 'btnStringPnl', strips: 'btnStripsPnl' }[name];
+        const visible = !state.panelVisible[name];
+        state.panelVisible[name] = visible;
+        document.getElementById(divId).style.display = visible ? '' : 'none';
+        document.getElementById(btnId).classList.toggle('active', visible);
+    },
+
+    // ── Parameter setters ─────────────────────────────────────────────────
+
+    setN(val) {
+        state.N = Math.round(Math.pow(10, val));
+        // Recompute J for current juncFrac
+        state.J = Math.max(3, Math.min(state.N - 2, Math.round(state.juncFrac * (state.N - 1))));
+        state.envelope.resize(state.J);
+        state.snapZ     = new Float32Array(state.J);
+        state.snapPlus  = new Float32Array(state.J);
+        state.snapMinus = new Float32Array(state.J);
+        resizeSeg2buf();
+
+        state.engine?.workletNode.port.postMessage({ type: 'setN', n: state.N });
+        state.engine?.workletNode.port.postMessage({ type: 'setJunction', frac: state.juncFrac });
+        updateTheoryDisplay();
+    },
+
+    setK(val) {
+        state.k1 = Math.pow(10, val);
+        state.engine?.workletNode.parameters.get('stiffness').setTargetAtTime(
+            state.k1, state.engine.audioCtx.currentTime, 0.01
+        );
+        updateTheoryDisplay();
+    },
+
+    setDamping(val) {
+        state.damping = Math.pow(10, val);
+        state.engine?.workletNode.parameters.get('damping').setTargetAtTime(
+            state.damping, state.engine.audioCtx.currentTime, 0.01
+        );
+    },
+
+    setJunction(val) {
+        state.juncFrac = val;
+        state.J = Math.max(3, Math.min(state.N - 2, Math.round(val * (state.N - 1))));
+        state.envelope.resize(state.J);
+        state.snapZ     = new Float32Array(state.J);
+        state.snapPlus  = new Float32Array(state.J);
+        state.snapMinus = new Float32Array(state.J);
+        resizeSeg2buf();
+
+        state.engine?.workletNode.port.postMessage({ type: 'setJunction', frac: val });
+        updateTheoryDisplay();
+    },
+
+    setR(val) {
+        state.R = val;
+        state.engine?.workletNode.parameters.get('reflectionR').setTargetAtTime(
+            val, state.engine.audioCtx.currentTime, 0.01
+        );
+        updateTheoryDisplay();
+    },
+
+    setPulseAmp(val)  { state.pulseAmp = val; },
+
+    setFippleGain(val) {
+        state.fippleGain = Math.pow(10, val);
+        state.engine?.workletNode.port.postMessage({ type: 'setFipple', gain: state.fippleGain, eps: state.fippleEps });
+    },
+
+    setFippleEps(val) {
+        state.fippleEps = Math.pow(10, val);
+        state.engine?.workletNode.port.postMessage({ type: 'setFipple', gain: state.fippleGain, eps: state.fippleEps });
+    },
+
+    setSweepF0(val) {
+        state.sweepF0 = val;
+        state.engine?.workletNode.port.postMessage({
+            type: 'setSweep', f0: state.sweepF0, f1: state.sweepF1, duration: state.sweepDur
+        });
+    },
+    setSweepF1(val) {
+        state.sweepF1 = val;
+        state.engine?.workletNode.port.postMessage({
+            type: 'setSweep', f0: state.sweepF0, f1: state.sweepF1, duration: state.sweepDur
+        });
+    },
+    setSweepDur(val) {
+        state.sweepDur = val;
+        state.engine?.workletNode.port.postMessage({
+            type: 'setSweep', f0: state.sweepF0, f1: state.sweepF1, duration: state.sweepDur
+        });
+    },
+
+    setSineFreq(val) {
+        state.sineFreq = val;
+        state.engine?.workletNode.port.postMessage({
+            type: 'setSine', freq: val, amp: state.sineAmp
+        });
+    },
+    setSineAmp(val) {
+        state.sineAmp = val;
+        state.engine?.workletNode.port.postMessage({
+            type: 'setSine', freq: state.sineFreq, amp: val
+        });
+    },
+
+    setVolume(val) {
+        state.volume = val / 100;
+        if (state.engine) {
+            state.engine.gainNode.gain.setTargetAtTime(
+                state.volume, state.engine.audioCtx.currentTime, 0.05
+            );
+        }
+    },
+
+    setSubSteps(val) {
+        const M = Math.max(1, Math.round(Math.pow(10, val)));
+        state.subSteps = M;
+        state.engine?.workletNode.port.postMessage({ type: 'setSubSteps', steps: M });
+
+        // Auto-mute when physics frequency would be subaudible (M > 20)
+        const slowMoNote = document.getElementById('slowMoNote');
+        if (state.engine) {
+            const targetGain = M > 20 ? 0 : state.volume;
+            state.engine.gainNode.gain.setTargetAtTime(
+                targetGain, state.engine.audioCtx.currentTime, 0.05
+            );
+        }
+        if (slowMoNote) {
+            slowMoNote.textContent = M > 20
+                ? `⚠ audio muted (×${M} slow motion)`
+                : M > 1 ? `×${M} slow motion` : '';
+            slowMoNote.style.color = M > 20 ? '#f84' : '#888';
+        }
+        updateTheoryDisplay(); // effective fs = sampleRate/M → markers shift with M
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Manual blow button — fire while held
+// ─────────────────────────────────────────────────────────────────────────────
+function setupBlowButton() {
+    const btn = document.getElementById('btnBlow');
+
+    function startBlow() {
+        state.engine?.workletNode.port.postMessage({ type: 'setManual', on: true, amp: 0.08 });
+        btn.style.background = '#4f8';
+        btn.style.color      = '#000';
+    }
+    function stopBlow() {
+        state.engine?.workletNode.port.postMessage({ type: 'setManual', on: false });
+        btn.style.background = '';
+        btn.style.color      = '';
+    }
+
+    btn.addEventListener('mousedown',  startBlow);
+    btn.addEventListener('mouseup',    stopBlow);
+    btn.addEventListener('mouseleave', stopBlow);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); startBlow(); }, { passive: false });
+    btn.addEventListener('touchend',   stopBlow);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animation loop — ~60 fps
+// ─────────────────────────────────────────────────────────────────────────────
+const TUNER_ELS = { noteEl: 'tunerNote', centsEl: 'tunerCents', freqEl: 'tunerFreq' };
+const EMPTY_TD  = new Float32Array(FFT_SIZE);
+const EMPTY_FD  = new Float32Array(FFT_SIZE / 2);
+
+function loop() {
+    try {
+        [tubeCanvas, stringCanvas, stripsCanvas, scopeCanvas, specCanvas].forEach(
+            PhysicsLab.resizeCanvas
+        );
+
+        // Physics canvases (always draw from latest snapshot)
+        if (state.panelVisible.tube)   drawTube(state.snapZ, state.seg2buf);
+        if (state.panelVisible.string) drawString(state.snapZ, state.seg2buf);
+        if (state.panelVisible.strips) drawStrips(state.snapPlus, state.snapMinus);
+
+        if (state.engine) {
+            const { analyser, timeDomainBuf, frequencyBuf, binHz } = state.engine;
+            const fs_eff = PhysicsLab.SAMPLE_RATE / state.subSteps;
+
+            // Oscilloscope — show ~10 cycles of the fundamental so peaks aren't packed
+            // and phase drift (from AGC / nonlinear FM) stays sub-pixel across the window.
+            analyser.getFloatTimeDomainData(timeDomainBuf);
+            const scopeF1 = theoreticalFreq(1, state.J, state.k1, state.R, fs_eff);
+            const scopeSamples = scopeF1 && scopeF1 > 1
+                ? Math.round(10 * PhysicsLab.SAMPLE_RATE / scopeF1)
+                : null; // fallback: show full buffer
+            PhysicsLab.Scope.draw(scopeCanvas, timeDomainBuf, { color: '#4f8', displaySamples: scopeSamples });
+
+            // Spectrum
+            const f1 = theoreticalFreq(1, state.J, state.k1, state.R, fs_eff);
+            const minFrac        = 20 / (FFT_SIZE / 2);
+            const displayFraction = (f1 && f1 >= 0.5)
+                ? Math.min(0.25, Math.max(minFrac, 10 * f1 / (PhysicsLab.SAMPLE_RATE / 2)))
+                : minFrac;
+
+            analyser.getFloatFrequencyData(frequencyBuf);
+            const rawPeak = PhysicsLab.detectPeak(frequencyBuf, binHz);
+            if (rawPeak) {
+                state.smoothedPeak = state.smoothedPeak
+                    ? state.smoothedPeak * 0.9 + rawPeak * 0.1
+                    : rawPeak;
+            }
+
+            PhysicsLab.Spectrum.draw(specCanvas, frequencyBuf, binHz, theoryMarkers(), {
+                displayFraction,
+                peakLabelId: 'peakLabel',
+                peakHz:      state.smoothedPeak
+            });
+            PhysicsLab.Tuner.update(TUNER_ELS, state.smoothedPeak);
+
+        } else {
+            PhysicsLab.Scope.draw(scopeCanvas, EMPTY_TD, { color: '#4f8' });
+            PhysicsLab.Spectrum.draw(specCanvas, EMPTY_FD, PhysicsLab.SAMPLE_RATE / FFT_SIZE, []);
+            PhysicsLab.Tuner.update(TUNER_ELS, null);
+        }
+    } catch (err) {
+        console.error('whistle_demo loop error:', err);
+    }
+
+    requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init — wire sliders and start animation
+// ─────────────────────────────────────────────────────────────────────────────
+function init() {
+    const PL = PhysicsLab;
+
+    // Tube parameters
+    PL.bindSlider('paramN', 'valN', v => App.setN(v),
+        v => String(Math.round(Math.pow(10, v))));
+    PL.bindSlider('paramK', 'valK', v => App.setK(v),
+        v => Math.pow(10, v).toFixed(3));
+    PL.bindSlider('paramD', 'valD', v => App.setDamping(v),
+        v => Math.pow(10, v).toFixed(6));
+
+    // End termination
+    PL.bindSlider('paramJunc', 'valJunc', v => App.setJunction(v),
+        v => v.toFixed(2));
+    PL.bindSlider('paramR', 'valR', v => App.setR(v),
+        v => (v >= 0 ? '+' : '') + v.toFixed(2));
+
+    // Mode-specific
+    PL.bindSlider('paramPulseAmp', 'valPulseAmp', v => App.setPulseAmp(v),
+        v => v.toFixed(2));
+    PL.bindSlider('paramFippleGain', 'valFippleGain', v => App.setFippleGain(v),
+        v => Math.pow(10, v).toFixed(4));
+    PL.bindSlider('paramFippleEps', 'valFippleEps', v => App.setFippleEps(v),
+        v => Math.pow(10, v).toFixed(3));
+    PL.bindSlider('paramSweepF0', 'valSweepF0', v => App.setSweepF0(v),
+        v => Math.round(v).toString());
+    PL.bindSlider('paramSweepF1', 'valSweepF1', v => App.setSweepF1(v),
+        v => Math.round(v).toString());
+    PL.bindSlider('paramSweepDur', 'valSweepDur', v => App.setSweepDur(v),
+        v => v.toFixed(1));
+    PL.bindSlider('paramSineFreq', 'valSineFreq', v => App.setSineFreq(v),
+        v => Math.round(v).toString());
+    PL.bindSlider('paramSineAmp', 'valSineAmp', v => App.setSineAmp(v),
+        v => v.toFixed(3));
+
+    // Audio
+    PL.bindSlider('paramVol', 'valVol', v => App.setVolume(v),
+        v => `${Math.round(v)}%`);
+
+    // Slow motion (log scale: 10^v, v=0→1×, v=3→1000×)
+    PL.bindSlider('paramSlowMo', 'valSlowMo', v => App.setSubSteps(v),
+        v => {
+            const M = Math.max(1, Math.round(Math.pow(10, v)));
+            return M === 1 ? '1×' : `×${M}`;
+        });
+
+    // bindSlider intentionally does not fire callbacks on load (only sets badge
+    // text).  Manually fire the callbacks that affect derived state (J, theory
+    // markers) in dependency order so state is consistent before first draw.
+    App.setN(parseFloat(document.getElementById('paramN').value));
+    App.setK(parseFloat(document.getElementById('paramK').value));
+    App.setJunction(parseFloat(document.getElementById('paramJunc').value));
+    App.setR(parseFloat(document.getElementById('paramR').value));
+
+    setupBlowButton();
+    updateTheoryDisplay();
+    loop();
+}
+
+init();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

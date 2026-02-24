@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Making Waves: Vibrating Membrane Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="../lib/physics-lab.js"></script>
+    <style>
+        body { background: #0a0a0c; color: #ececec; }
+
+        .panel {
+            background: #16161a;
+            border: 1px solid #2a2a2e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            border: 1px solid #2a2a2e;
+        }
+
+        .canvas-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #f90;    /* orange accent — distinguishes membrane from string (blue) and bar (green) */
+            margin-bottom: 4px;
+        }
+
+        .tuner-box {
+            background: #000;
+            border: 1px solid #2a2a2e;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-family: monospace;
+            text-align: center;
+        }
+
+        .tuner-note  { font-size: 2rem; font-weight: bold; color: #f90; line-height: 1; }
+        .tuner-cents { font-size: 0.75rem; color: #888; }
+        .tuner-freq  { font-size: 0.85rem; color: #fff; margin-top: 2px; }
+
+        .val-badge {
+            background: #222;
+            color: #fff;
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 1px 6px;
+            border-radius: 4px;
+            float: right;
+        }
+
+        label { font-size: 0.75rem; color: #aaa; text-transform: uppercase; }
+
+        input[type="range"] { accent-color: #f90; width: 100%; }
+
+        h5 { font-size: 0.8rem; color: #f90; text-transform: uppercase;
+             letter-spacing: 2px; border-bottom: 1px solid #2a2a2e;
+             padding-bottom: 6px; margin-bottom: 12px; }
+
+        #btnAudio { min-width: 120px; }
+
+        /* Theory table rows */
+        .mode-row { display: grid; grid-template-columns: 3.5rem 1fr 2.5rem; gap: 0 6px;
+                    font-size: 0.75rem; font-family: monospace; line-height: 1.9; }
+        .mode-label { color: #aaa; }
+        .mode-freq  { color: #fff; }
+        .mode-ratio { color: #666; text-align: right; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid py-3 px-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0" style="font-weight:300;">
+            Making Waves &nbsp;<span style="opacity:0.4">|</span>&nbsp; Vibrating Membrane
+        </h4>
+        <div class="tuner-box" style="min-width:160px;">
+            <div id="tunerNote" class="tuner-note">--</div>
+            <div id="tunerCents" class="tuner-cents">--</div>
+            <div id="tunerFreq"  class="tuner-freq">0.00 Hz</div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <!-- ── Left: canvases ─────────────────────────────────────── -->
+        <div class="col-lg-8 d-flex flex-column gap-3">
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Membrane — Physical View
+                        <span id="colormapLegend" style="font-size:0.75em; color:#666;">&nbsp;|&nbsp; amber = +z &nbsp; blue = −z</span>
+                    </div>
+                    <button id="btnViewToggle" onclick="App.toggleView()"
+                            class="btn btn-outline-secondary btn-sm"
+                            style="font-size:0.65rem; padding:2px 8px; color:#aaa;">⬜ colour map</button>
+                </div>
+                <canvas id="memCanvas" height="280"></canvas>
+                <div class="mt-2 text-center">
+                    <small class="text-secondary">Click or tap the membrane to strike it at that position</small>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Oscilloscope — Time Domain</div>
+                    <span id="scopeModeLabel" style="font-size:0.65rem; color:#a4f; font-family:monospace;"></span>
+                </div>
+                <canvas id="scopeCanvas" height="110"></canvas>
+            </div>
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Spectrum — Frequency Domain</div>
+                    <div id="peakLabel" style="font-family:monospace; font-size:0.75rem; color:#fff;"></div>
+                </div>
+                <canvas id="specCanvas" height="140"></canvas>
+            </div>
+
+        </div>
+
+        <!-- ── Right: controls ───────────────────────────────────── -->
+        <div class="col-lg-4">
+            <div class="panel h-100 d-flex flex-column gap-3">
+
+                <!-- Audio control -->
+                <div class="d-flex gap-2">
+                    <button id="btnAudio" class="btn btn-outline-danger flex-grow-1"
+                            onclick="App.toggleAudio()">Start Audio</button>
+                    <button class="btn btn-outline-secondary flex-grow-1"
+                            onclick="App.strike()">Strike</button>
+                </div>
+
+                <!-- Membrane parameters -->
+                <div>
+                    <h5>Membrane</h5>
+
+                    <label>Grid (N) <span id="valN" class="val-badge">50</span></label>
+                    <input type="range" id="paramN" min="0.778" max="1.903" step="0.005" value="1.699">
+
+                    <label class="mt-2">Stiffness (k) <span id="valK" class="val-badge">0.1000</span></label>
+                    <input type="range" id="paramK" min="-3" max="-0.347" step="0.01" value="-1">
+
+                    <label class="mt-2">Damping <span id="valD" class="val-badge">0.000200</span></label>
+                    <input type="range" id="paramD" min="-5" max="-2.3" step="0.05" value="-3.7">
+                </div>
+
+                <!-- Strike -->
+                <div>
+                    <h5>Strike</h5>
+
+                    <label>Width (nodes) <span id="valWidth" class="val-badge">5.0</span></label>
+                    <input type="range" id="paramWidth" min="0.5" max="20" step="0.5" value="5">
+
+                    <label class="mt-2">Amplitude <span id="valAmp" class="val-badge">1.00</span></label>
+                    <input type="range" id="paramAmp" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+
+                <!-- Audio output -->
+                <div>
+                    <h5>Audio Output</h5>
+
+                    <label>Listen X <span id="valOutX" class="val-badge">0.35</span></label>
+                    <input type="range" id="paramOutX" min="0.05" max="0.95" step="0.01" value="0.35">
+
+                    <label class="mt-2">Listen Y <span id="valOutY" class="val-badge">0.35</span></label>
+                    <input type="range" id="paramOutY" min="0.05" max="0.95" step="0.01" value="0.35">
+
+                    <label class="mt-2">Volume <span id="valVol" class="val-badge">50%</span></label>
+                    <input type="range" id="paramVol" min="0" max="100" step="1" value="50">
+                </div>
+
+                <!-- Theoretical frequency display -->
+                <div class="mt-auto">
+                    <h5>Theory — Mode Frequencies</h5>
+
+                    <!-- Column headers -->
+                    <div class="mode-row" style="color:#666; margin-bottom:2px;">
+                        <span>mode</span><span>frequency</span><span>ratio</span>
+                    </div>
+
+                    <div id="modeF11" class="mode-row">
+                        <span class="mode-label">(1,1)</span>
+                        <span class="mode-freq">—</span>
+                        <span class="mode-ratio">1.000</span>
+                    </div>
+                    <div id="modeF12" class="mode-row">
+                        <span class="mode-label">(1,2)*</span>
+                        <span class="mode-freq">—</span>
+                        <span class="mode-ratio">1.581</span>
+                    </div>
+                    <div id="modeF22" class="mode-row">
+                        <span class="mode-label">(2,2)</span>
+                        <span class="mode-freq">—</span>
+                        <span class="mode-ratio">2.000</span>
+                    </div>
+                    <div id="modeF13" class="mode-row">
+                        <span class="mode-label">(1,3)*</span>
+                        <span class="mode-freq">—</span>
+                        <span class="mode-ratio">2.236</span>
+                    </div>
+                    <div id="modeF23" class="mode-row">
+                        <span class="mode-label">(2,3)*</span>
+                        <span class="mode-freq">—</span>
+                        <span class="mode-ratio">2.550</span>
+                    </div>
+                    <div id="modeF33" class="mode-row">
+                        <span class="mode-label">(3,3)</span>
+                        <span class="mode-freq">—</span>
+                        <span class="mode-ratio">3.000</span>
+                    </div>
+
+                    <div id="subaudibleWarn" class="mt-1" style="font-size:0.8rem; font-family:monospace; min-height:1.2em;"></div>
+
+                    <div class="mt-2" style="font-size:0.65rem; color:#555; line-height:1.5;">
+                        f<sub>mn</sub> = (f<sub>s</sub>/π) arcsin(√(k·(sin²(mπ/(2(N−1))) + sin²(nπ/(2(N−1))))))<br>
+                        Ratios ≈ 1 : 1.58 : 2.00 : 2.24 … (inharmonic)<br>
+                        * degenerate pair — f<sub>12</sub> = f<sub>21</sub>, etc.
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+'use strict';
+
+// physics-lab.js loaded in <head>.
+// This file contains only membrane-specific code.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+const FFT_SIZE       = 8192;
+const RING_BUF_SIZE  = 1024;   // slow-scope ring buffer entries
+const RING_RATE      = PhysicsLab.SAMPLE_RATE / (8 * 128);  // ≈43 snapshots/sec
+
+// Modes to display in theory panel and spectrum markers.
+// [m, n, row-element-id, ratio-label, marker-color]
+const MEMBRANE_MODES = [
+    [1, 1, 'modeF11', '1.000', '#ff4'],   // yellow
+    [1, 2, 'modeF12', '1.581', '#f80'],   // orange  (degenerate with 2,1)
+    [2, 2, 'modeF22', '2.000', '#4f8'],   // green
+    [1, 3, 'modeF13', '2.236', '#48f'],   // blue    (degenerate with 3,1)
+    [2, 3, 'modeF23', '2.550', '#e4f'],   // lavender (degenerate with 3,2)
+    [3, 3, 'modeF33', '3.000', '#f48'],   // pink
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {
+    // Membrane physics parameters
+    N:           50,        // grid size (N×N); must match worklet default N
+    k:           0.10,      // stiffness (stability limit: k < 0.50)
+    damping:     0.0002,
+    strikeWidth: 5.0,       // Gaussian σ in lattice nodes
+    strikeAmp:   1.0,
+    strikeX:     0.35,      // last/default normalised strike position
+    strikeY:     0.35,
+    outputX:     0.35,      // audio output node (normalised)
+    outputY:     0.35,
+    volume:      0.50,
+
+    // Audio engine (null until Start Audio is clicked)
+    engine: null,
+
+    // Latest N×N displacement snapshot from worklet (flat Float32Array)
+    renderSnap:   new Float32Array(50 * 50),
+
+    // Running peaks for adaptive scaling
+    snapPeak:    0.001,     // max |z| across the whole snapshot (for color map)
+    outputPeak:  0.001,     // running |z| at output node (for slow-scope normalisation)
+
+    // Smoothed tuner peak
+    smoothedPeak: null,
+
+    // View mode
+    isoView: false,
+
+    // Slow-scope ring buffer — one output-node sample per worklet snapshot
+    // Fills at RING_RATE ≈ 43 Hz; 1024 entries ≈ 24 seconds
+    scopeRingBuf:   new Float32Array(RING_BUF_SIZE),
+    scopeRingPos:   0,
+    scopeRingCount: 0,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Membrane physics: exact discrete mode frequency
+//
+//   sin(ω_mn/2) = √(k·(sin²(mπ/(2(N-1))) + sin²(nπ/(2(N-1)))))
+//   f_mn = (fs/π)·arcsin(…)
+//
+// Derivation: 2D Laplacian stencil eigenvalue = −4sin²(qm/2) − 4sin²(qn/2)
+// where qm = mπ/(N-1). Verlet stability equation gives sin²(ω/2) = k·|λ|/4.
+// Stability limit: k·(1+1) ≤ 1 → k ≤ 0.5.
+// ─────────────────────────────────────────────────────────────────────────────
+function theoreticalFreq(m, n, N, k, fs = PhysicsLab.SAMPLE_RATE) {
+    if (N < 3) return null;
+    const sm  = Math.sin(m * Math.PI / (2 * (N - 1)));
+    const sn  = Math.sin(n * Math.PI / (2 * (N - 1)));
+    const arg = Math.sqrt(k * (sm * sm + sn * sn));
+    if (arg >= 1.0) return null;   // above Nyquist
+    return (fs / Math.PI) * Math.asin(arg);
+}
+
+function updateTheoryDisplay() {
+    const { N, k } = state;
+    for (const [m, n, rowId] of MEMBRANE_MODES) {
+        const f    = theoreticalFreq(m, n, N, k);
+        const row  = document.getElementById(rowId);
+        if (!row) continue;
+        row.children[1].textContent = f !== null ? `${f.toFixed(1)} Hz` : '—';
+    }
+    updateSubaudibleGuard();
+}
+
+function updateSubaudibleGuard() {
+    const f11    = theoreticalFreq(1, 1, state.N, state.k);
+    const warnEl = document.getElementById('subaudibleWarn');
+    if (!warnEl) return;
+
+    const isMuted      = f11 !== null && f11 < 5;
+    const isSubaudible = f11 !== null && f11 < 20;
+
+    if (isMuted) {
+        warnEl.textContent = '⚠ below 5 Hz — audio muted';
+        warnEl.style.color = '#f84';
+    } else if (isSubaudible) {
+        warnEl.textContent = '⚠ subaudible';
+        warnEl.style.color = '#fa0';
+    } else {
+        warnEl.textContent = '';
+    }
+
+    if (state.engine) {
+        const targetGain = isMuted ? 0 : state.volume;
+        state.engine.gainNode.gain.setTargetAtTime(
+            targetGain, state.engine.audioCtx.currentTime, 0.05
+        );
+    }
+}
+
+// Build spectrum marker array for PhysicsLab.Spectrum.draw()
+function theoryMarkers() {
+    return MEMBRANE_MODES.map(([m, n, , , color]) => ({
+        freq:  theoreticalFreq(m, n, state.N, state.k),
+        label: `f${m}${n}`,
+        color
+    }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Membrane colour map — ImageData approach for performance.
+// Per-pixel fillRect would be ~100× slower at typical canvas sizes.
+//
+// Colour convention:
+//   z > 0 (positive / toward viewer) → amber gradient ( 0,0,0 → 250,160,0 )
+//   z = 0 (equilibrium)              → black (#000)
+//   z < 0 (negative / away)          → blue  gradient ( 0,0,0 → 64,128,255 )
+//
+// The output node position is overlaid as a white circle after putImageData.
+// The last strike position is overlaid as a dashed gold crosshair.
+// ─────────────────────────────────────────────────────────────────────────────
+const memCanvas  = document.getElementById('memCanvas');
+const scopeCanvas = document.getElementById('scopeCanvas');
+const specCanvas  = document.getElementById('specCanvas');
+const memCtx     = memCanvas.getContext('2d');
+
+let _memImageData = null;   // reused each frame; recreated only on canvas resize
+
+function drawMembrane(snapshot, N) {
+    const W = memCanvas.width;
+    const H = memCanvas.height;
+
+    // Guard: if snapshot is incomplete (e.g. immediately after N change), fill black
+    if (!snapshot || snapshot.length < N * N) {
+        memCtx.fillStyle = '#000';
+        memCtx.fillRect(0, 0, W, H);
+        return;
+    }
+
+    // Reuse ImageData if canvas size is unchanged — avoids per-frame allocation
+    if (!_memImageData || _memImageData.width !== W || _memImageData.height !== H) {
+        _memImageData = memCtx.createImageData(W, H);
+    }
+    const pixels = _memImageData.data;   // Uint8ClampedArray RGBA
+
+    const maxAmp = state.snapPeak > 0.001 ? state.snapPeak : 0.001;
+    const Nm1    = N - 1;
+
+    for (let py = 0; py < H; py++) {
+        // Map canvas row → membrane row index.
+        // floor(py * N / H) gives each of the N nodes an equal H/N-pixel tall cell,
+        // so grid lines drawn at gi*H/N land exactly on cell boundaries.
+        const mi      = Math.min(Nm1, (py * N / H) | 0);
+        const rowBase = mi * N;
+        for (let px = 0; px < W; px++) {
+            const mj  = Math.min(Nm1, (px * N / W) | 0);
+            const v   = snapshot[rowBase + mj] / maxAmp;   // normalised, [-1, 1]
+            const idx = (py * W + px) * 4;
+
+            if (v >= 0) {
+                // Positive → amber (R=255, G=180, B=0); gamma so small amplitudes show colour
+                const g = Math.pow(v, 0.4);
+                pixels[idx]     = (g * 255) | 0;
+                pixels[idx + 1] = (g * 180) | 0;
+                pixels[idx + 2] = 0;
+            } else {
+                // Negative → deep blue (R=20, G=80, B=255); gamma matched
+                const g         = Math.pow(-v, 0.4);
+                pixels[idx]     = (g * 20)  | 0;
+                pixels[idx + 1] = (g * 80)  | 0;
+                pixels[idx + 2] = (g * 255) | 0;
+            }
+            pixels[idx + 3] = 255;   // fully opaque
+        }
+    }
+    memCtx.putImageData(_memImageData, 0, 0);
+
+    // ── Grid overlay — one line per cell boundary so overlay aligns with mesh exactly.
+    // Each of the N nodes occupies exactly W/N × H/N pixels; lines at gi*W/N, gj*H/N.
+    const pixPerCell = W / N;   // exact cell width in canvas pixels
+    const gridStep   = Math.max(1, Math.ceil(3 / pixPerCell));   // skip if < 3 px apart
+    const gridLW     = pixPerCell >= 12 ? 1.5 : pixPerCell >= 6 ? 1.0 : 0.5;
+    memCtx.strokeStyle = 'rgba(60, 200, 200, 0.42)';
+    memCtx.lineWidth   = gridLW;
+    for (let gi = 0; gi <= N; gi += gridStep) {
+        const py = gi * H / N;
+        memCtx.beginPath(); memCtx.moveTo(0, py); memCtx.lineTo(W, py); memCtx.stroke();
+    }
+    for (let gj = 0; gj <= N; gj += gridStep) {
+        const px = gj * W / N;
+        memCtx.beginPath(); memCtx.moveTo(px, 0); memCtx.lineTo(px, H); memCtx.stroke();
+    }
+    // Solid border
+    memCtx.strokeStyle = 'rgba(80, 220, 220, 0.50)';
+    memCtx.lineWidth   = 2;
+    memCtx.strokeRect(1, 1, W - 2, H - 2);
+
+    // ── Overlay: last strike position (gold dashed crosshair) ─────────────
+    const sx = state.strikeX * W;
+    const sy = state.strikeY * H;
+    memCtx.strokeStyle = 'rgba(255, 200, 0, 0.55)';
+    memCtx.lineWidth   = 1;
+    memCtx.setLineDash([4, 4]);
+    memCtx.beginPath();
+    memCtx.moveTo(sx - 12, sy); memCtx.lineTo(sx + 12, sy);
+    memCtx.moveTo(sx, sy - 12); memCtx.lineTo(sx, sy + 12);
+    memCtx.stroke();
+    memCtx.setLineDash([]);
+
+    // ── Overlay: audio output node (white circle) ─────────────────────────
+    const ox = state.outputX * W;
+    const oy = state.outputY * H;
+    memCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    memCtx.lineWidth   = 2;
+    memCtx.beginPath();
+    memCtx.arc(ox, oy, 6, 0, Math.PI * 2);
+    memCtx.stroke();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Isometric cabinet projection view — draws the membrane as a 3D height field.
+//
+// Cabinet projection: x-axis (columns) goes right; y-axis (rows) goes obliquely
+// right+down at 30°, half-scale; z-axis (displacement) goes up.
+// Rows are drawn back-to-front (i=0 first) so nearer rows overwrite farther ones.
+// Column wires are drawn every ~N/12 columns at 30% alpha to add depth cues
+// without cluttering the horizontal profile lines.
+// Lines are coloured by the average displacement of that row/column (amber/blue).
+// ─────────────────────────────────────────────────────────────────────────────
+function drawMembraneIsometric(snapshot, N) {
+    const W = memCanvas.width;
+    const H = memCanvas.height;
+
+    memCtx.fillStyle = '#06100e';
+    memCtx.fillRect(0, 0, W, H);
+
+    if (!snapshot || snapshot.length < N * N) return;
+
+    const maxAmp = state.snapPeak > 0.001 ? state.snapPeak : 0.001;
+    const Nm1    = N - 1;
+
+    // Cabinet 30°, 0.5-scale depth axis
+    const iCos   = 0.5 * Math.cos(Math.PI / 6);   // ≈ 0.433
+    const iSin   = 0.5 * Math.sin(Math.PI / 6);   // ≈ 0.25
+
+    // Horizontal step: fit full width (j-span + oblique i-span) in canvas
+    const jStep  = (W * 0.90) / Math.max(1, Nm1 * (1 + iCos));
+    const iStepX = jStep * iCos;
+    const iStepY = jStep * iSin;
+
+    // Vertical displacement scale: up to 28% of canvas height for max amplitude
+    const zScale = H * 0.28;
+
+    // Screen origin: place equilibrium back-left corner so membrane + z range fit vertically
+    const ox = W * 0.04;
+    const oy = H * 0.82 - Nm1 * iStepY;
+
+    // Project node (row i, col j, displacement zv) → screen (px, py)
+    const proj = (i, j, zv) => [
+        ox + j * jStep + i * iStepX,
+        oy + i * iStepY - (zv / maxAmp) * zScale
+    ];
+
+    // Map normalised z value to CSS colour string — gamma 0.4 for vibrancy
+    const zColor = (zv) => {
+        const v = zv / maxAmp;
+        if (v >= 0) {
+            const g = Math.pow(Math.min(v, 1), 0.4);
+            return `rgb(${(g * 255) | 0},${(g * 180) | 0},0)`;
+        }
+        const g = Math.pow(Math.min(-v, 1), 0.4);
+        return `rgb(${(g * 20) | 0},${(g * 80) | 0},${(g * 255) | 0})`;
+    };
+
+    // Boundary node value (always zero in the physics)
+    const nodeZ = (i, j) =>
+        (i >= 1 && i <= Nm1 - 1 && j >= 1 && j <= Nm1 - 1)
+            ? (snapshot[i * N + j] || 0) : 0;
+
+    // ── Equilibrium boundary frame ────────────────────────────────────────
+    memCtx.strokeStyle = '#2a6060';
+    memCtx.lineWidth   = 1.5;
+    memCtx.beginPath();
+    memCtx.moveTo(...proj(0,    0,    0));
+    memCtx.lineTo(...proj(0,    Nm1,  0));
+    memCtx.lineTo(...proj(Nm1,  Nm1,  0));
+    memCtx.lineTo(...proj(Nm1,  0,    0));
+    memCtx.lineTo(...proj(0,    0,    0));
+    memCtx.stroke();
+
+    // ── Horizontal rows — back to front (i = 0, 1, … N-1) ───────────────
+    // Each row is drawn as a single path coloured by its peak-|z| node
+    // (not its average) so modes with mixed sign still show vivid colour.
+    for (let i = 0; i <= Nm1; i++) {
+        const isBoundary = (i === 0 || i === Nm1);
+
+        // Find peak z in this row for colour
+        let pkZ = 0;
+        if (!isBoundary) {
+            for (let j = 1; j < Nm1; j++) {
+                const zv = snapshot[i * N + j] || 0;
+                if (Math.abs(zv) > Math.abs(pkZ)) pkZ = zv;
+            }
+        }
+        memCtx.strokeStyle = isBoundary ? '#2a6060' : zColor(pkZ);
+        memCtx.lineWidth   = isBoundary ? 1 : 1.5;
+        memCtx.beginPath();
+        for (let j = 0; j <= Nm1; j++) {
+            const [px, py] = proj(i, j, nodeZ(i, j));
+            if (j === 0) memCtx.moveTo(px, py);
+            else         memCtx.lineTo(px, py);
+        }
+        memCtx.stroke();
+    }
+
+    // ── Column wires (every ~N/12 columns) ───────────────────────────────
+    const colStep = Math.max(1, Math.round(Nm1 / 12));
+    memCtx.globalAlpha = 0.55;
+    for (let j = 0; j <= Nm1; j += colStep) {
+        const isBoundary = (j === 0 || j === Nm1);
+
+        let pkZ = 0;
+        if (!isBoundary) {
+            for (let i = 1; i < Nm1; i++) {
+                const zv = snapshot[i * N + j] || 0;
+                if (Math.abs(zv) > Math.abs(pkZ)) pkZ = zv;
+            }
+        }
+        memCtx.strokeStyle = isBoundary ? '#2a6060' : zColor(pkZ);
+        memCtx.lineWidth   = 1.0;
+        memCtx.beginPath();
+        for (let i = 0; i <= Nm1; i++) {
+            const [px, py] = proj(i, j, nodeZ(i, j));
+            if (i === 0) memCtx.moveTo(px, py);
+            else         memCtx.lineTo(px, py);
+        }
+        memCtx.stroke();
+    }
+    memCtx.globalAlpha = 1.0;
+
+    // ── Output node marker ───────────────────────────────────────────────
+    const outI = Math.min(Nm1, Math.max(0, Math.round(state.outputY * Nm1)));
+    const outJ = Math.min(Nm1, Math.max(0, Math.round(state.outputX * Nm1)));
+    const [opx, opy] = proj(outI, outJ, nodeZ(outI, outJ));
+    memCtx.strokeStyle = 'rgba(255,255,255,0.9)';
+    memCtx.lineWidth   = 2;
+    memCtx.beginPath();
+    memCtx.arc(opx, opy, 5, 0, Math.PI * 2);
+    memCtx.stroke();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slow-scope helper — ring buffer view for subaudible f₁₁ < 20 Hz.
+// Returns a normalised Float32Array spanning ~4 periods, ready for Scope.draw().
+// (AnalyserNode holds only~185 ms; subaudible periods can be seconds long.)
+// ─────────────────────────────────────────────────────────────────────────────
+function getSlowScopeView(f11) {
+    const available = state.scopeRingCount;
+    if (available < 2) return new Float32Array(2);
+
+    // How many ring-buffer entries cover ~4 full periods at f11
+    const cycleEntries = Math.ceil(4 * RING_RATE / Math.max(f11, 0.1));
+    const n = Math.max(4, Math.min(cycleEntries, available));
+
+    // Extract the most-recent n entries in chronological order
+    const out = new Float32Array(n);
+    const writePos = state.scopeRingPos % RING_BUF_SIZE;
+    for (let i = 0; i < n; i++) {
+        const idx = (writePos - n + i + RING_BUF_SIZE * 4) % RING_BUF_SIZE;
+        out[i] = state.scopeRingBuf[idx];
+    }
+
+    // Normalise by running output-node peak
+    const peak = state.outputPeak > 0.001 ? state.outputPeak : 0.001;
+    for (let i = 0; i < n; i++) out[i] /= peak;
+
+    return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App — membrane-specific parameter management and audio lifecycle
+// ─────────────────────────────────────────────────────────────────────────────
+const App = {
+
+    async toggleAudio() {
+        const btn    = document.getElementById('btnAudio');
+        const action = PhysicsLab.AudioEngine.cycleButton(
+            state.engine?.audioCtx ?? null, btn
+        );
+        if (action === 'create') {
+            await this._initAudio();
+            this.strike();   // auto-strike slightly off-centre on start
+        }
+    },
+
+    async _initAudio() {
+        state.engine = await PhysicsLab.AudioEngine.create({
+            workletUrl:    'membrane-worklet.js',
+            processorName: 'membrane-processor',
+            parameterData: { stiffness: state.k, damping: state.damping },
+            fftSize:       FFT_SIZE,
+            initialGain:   state.volume
+        });
+
+        state.engine.workletNode.port.onmessage = (e) => {
+            if (e.data.type !== 'snapshot') return;
+
+            // Keep the received Float32Array as the render snapshot.
+            // (.slice() was used in the worklet, so this is a fresh buffer
+            //  that we own until the next snapshot overwrites state.renderSnap.)
+            state.renderSnap = e.data.data;
+            const N   = state.N;
+            const snap = state.renderSnap;
+
+            // Update running snapshot peak for adaptive color map scale
+            let snapMax = 0.001;
+            for (let i = 0; i < snap.length; i++) {
+                const av = Math.abs(snap[i]);
+                if (av > snapMax) snapMax = av;
+            }
+            state.snapPeak = Math.max(state.snapPeak * 0.9998, snapMax);
+
+            // Extract output-node value for ring buffer and output peak
+            const outI   = Math.min(N - 1, Math.max(0, Math.round(state.outputY * (N - 1))));
+            const outJ   = Math.min(N - 1, Math.max(0, Math.round(state.outputX * (N - 1))));
+            const sample = (outI * N + outJ < snap.length) ? (snap[outI * N + outJ] || 0) : 0;
+
+            state.outputPeak = Math.max(state.outputPeak * 0.9995, Math.abs(sample));
+            state.scopeRingBuf[state.scopeRingPos % RING_BUF_SIZE] = sample;
+            state.scopeRingPos++;
+            state.scopeRingCount = Math.min(state.scopeRingCount + 1, RING_BUF_SIZE);
+        };
+
+        state.engine.workletNode.port.postMessage({ type: 'setN', n: state.N });
+        state.engine.workletNode.port.postMessage({
+            type: 'setOutput', nx: state.outputX, ny: state.outputY
+        });
+    },
+
+    strike(nx, ny) {
+        // Default to last click/button position; fallback to initial off-centre default
+        nx = (nx !== undefined) ? nx : state.strikeX;
+        ny = (ny !== undefined) ? ny : state.strikeY;
+        state.strikeX = nx;
+        state.strikeY = ny;
+        if (!state.engine) return;
+        state.engine.workletNode.port.postMessage({
+            type:  'strike',
+            nx,
+            ny,
+            width: state.strikeWidth,
+            amp:   state.strikeAmp
+        });
+    },
+
+    setN(val) {
+        state.N = Math.round(Math.pow(10, val));
+        // Reset render snapshot and all adaptive state that depends on N
+        state.renderSnap   = new Float32Array(state.N * state.N);
+        state.snapPeak     = 0.001;
+        state.outputPeak   = 0.001;
+        state.scopeRingBuf.fill(0);
+        state.scopeRingPos   = 0;
+        state.scopeRingCount = 0;
+        if (state.engine) {
+            state.engine.workletNode.port.postMessage({ type: 'setN', n: state.N });
+        }
+        updateTheoryDisplay();
+    },
+
+    setK(val) {
+        state.k = Math.pow(10, val);
+        if (state.engine) {
+            state.engine.workletNode.parameters.get('stiffness').setTargetAtTime(
+                state.k, state.engine.audioCtx.currentTime, 0.01
+            );
+        }
+        updateTheoryDisplay();
+    },
+
+    setDamping(val) {
+        state.damping = Math.pow(10, val);
+        if (state.engine) {
+            state.engine.workletNode.parameters.get('damping').setTargetAtTime(
+                state.damping, state.engine.audioCtx.currentTime, 0.01
+            );
+        }
+    },
+
+    setStrikeWidth(val) { state.strikeWidth = val; },
+    setStrikeAmp(val)   { state.strikeAmp   = val; },
+
+    setOutputX(val) {
+        state.outputX = val;
+        if (state.engine) {
+            state.engine.workletNode.port.postMessage({
+                type: 'setOutput', nx: state.outputX, ny: state.outputY
+            });
+        }
+    },
+
+    setOutputY(val) {
+        state.outputY = val;
+        if (state.engine) {
+            state.engine.workletNode.port.postMessage({
+                type: 'setOutput', nx: state.outputX, ny: state.outputY
+            });
+        }
+    },
+
+    setVolume(val) {
+        state.volume = val / 100;
+        if (state.engine) {
+            // Respect mute state: don't restore gain while in the subaudible-mute zone
+            const f11 = theoreticalFreq(1, 1, state.N, state.k);
+            const targetGain = (f11 !== null && f11 < 5) ? 0 : state.volume;
+            state.engine.gainNode.gain.setTargetAtTime(
+                targetGain, state.engine.audioCtx.currentTime, 0.05
+            );
+        }
+    },
+
+    toggleView() {
+        state.isoView = !state.isoView;
+        const btn    = document.getElementById('btnViewToggle');
+        const legend = document.getElementById('colormapLegend');
+        if (state.isoView) {
+            btn.textContent    = '🏔 isometric';
+            legend.style.display = 'none';
+        } else {
+            btn.textContent    = '⬜ colour map';
+            legend.style.display = '';
+        }
+        // Reset ImageData cache so it's rebuilt at the new size if needed
+        _memImageData = null;
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas click-to-strike — maps click/touch to normalised membrane coordinates
+// ─────────────────────────────────────────────────────────────────────────────
+function handleStrikeAt(clientX, clientY) {
+    const rect = memCanvas.getBoundingClientRect();
+    const nx   = Math.max(0.05, Math.min(0.95, (clientX - rect.left) / rect.width));
+    const ny   = Math.max(0.05, Math.min(0.95, (clientY - rect.top)  / rect.height));
+    App.strike(nx, ny);
+}
+
+memCanvas.addEventListener('click', (e) => {
+    if (state.engine) handleStrikeAt(e.clientX, e.clientY);
+});
+memCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (state.engine) handleStrikeAt(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animation loop — ~60 fps regardless of audio state
+// try-catch prevents a single runtime error from killing requestAnimationFrame;
+// rAF is called unconditionally so animation survives any transient exception.
+// ─────────────────────────────────────────────────────────────────────────────
+const TUNER_ELS = { noteEl: 'tunerNote', centsEl: 'tunerCents', freqEl: 'tunerFreq' };
+const EMPTY_TD  = new Float32Array(FFT_SIZE);
+const EMPTY_FD  = new Float32Array(FFT_SIZE / 2);
+
+function loop() {
+    try {
+        [memCanvas, scopeCanvas, specCanvas].forEach(PhysicsLab.resizeCanvas);
+
+        if (state.isoView) {
+            drawMembraneIsometric(state.renderSnap, state.N);
+        } else {
+            drawMembrane(state.renderSnap, state.N);
+        }
+
+        if (state.engine) {
+            const { analyser, timeDomainBuf, frequencyBuf, binHz } = state.engine;
+
+            // ── Oscilloscope: slow-scope ring buffer below 20 Hz ───────────────
+            // The AnalyserNode holds only ~185 ms; periods below 5 Hz exceed that.
+            const f11      = theoreticalFreq(1, 1, state.N, state.k);
+            const slowMode = f11 !== null && f11 < 20;
+            const modeLbl  = document.getElementById('scopeModeLabel');
+
+            if (slowMode) {
+                const slowBuf = getSlowScopeView(f11);
+                PhysicsLab.Scope.draw(scopeCanvas, slowBuf, { color: '#a4f' });
+                if (modeLbl) modeLbl.textContent = 'slow scope';
+            } else {
+                analyser.getFloatTimeDomainData(timeDomainBuf);
+                PhysicsLab.Scope.draw(scopeCanvas, timeDomainBuf, { color: '#f90' });
+                if (modeLbl) modeLbl.textContent = '';
+            }
+
+            // ── Spectrum: auto-zoom to show ~10 harmonics ─────────────────────
+            // minFrac ensures at least 20 FFT bins are always visible.
+            // No large floor — that would hide peaks at the left edge for low f₁₁.
+            const minFrac         = 20 / (FFT_SIZE / 2);   // ≈0.0049 → ~108 Hz window
+            const displayFraction = f11 && f11 >= 0.5
+                ? Math.min(0.25, Math.max(minFrac, 10 * f11 / (PhysicsLab.SAMPLE_RATE / 2)))
+                : minFrac;
+
+            analyser.getFloatFrequencyData(frequencyBuf);
+            const rawPeak = PhysicsLab.detectPeak(frequencyBuf, binHz);
+            if (rawPeak) {
+                state.smoothedPeak = state.smoothedPeak
+                    ? state.smoothedPeak * 0.9 + rawPeak * 0.1
+                    : rawPeak;
+            }
+
+            PhysicsLab.Spectrum.draw(specCanvas, frequencyBuf, binHz, theoryMarkers(), {
+                displayFraction,
+                peakLabelId: 'peakLabel',
+                peakHz:      state.smoothedPeak
+            });
+            PhysicsLab.Tuner.update(TUNER_ELS, state.smoothedPeak);
+
+        } else {
+            PhysicsLab.Scope.draw(scopeCanvas, EMPTY_TD, { color: '#f90' });
+            PhysicsLab.Spectrum.draw(specCanvas, EMPTY_FD, PhysicsLab.SAMPLE_RATE / FFT_SIZE, []);
+            PhysicsLab.Tuner.update(TUNER_ELS, null);
+        }
+    } catch (err) {
+        console.error('membrane_demo loop error:', err);
+    }
+    requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init — wire sliders, display initial theory values, start animation
+// ─────────────────────────────────────────────────────────────────────────────
+function init() {
+    const PL = PhysicsLab;
+    PL.bindSlider('paramN',     'valN',     v => App.setN(v),          v => String(Math.round(Math.pow(10, v))));
+    PL.bindSlider('paramK',     'valK',     v => App.setK(v),          v => Math.pow(10, v).toFixed(4));
+    PL.bindSlider('paramD',     'valD',     v => App.setDamping(v),    v => Math.pow(10, v).toFixed(6));
+    PL.bindSlider('paramWidth', 'valWidth', v => App.setStrikeWidth(v),v => v.toFixed(1));
+    PL.bindSlider('paramAmp',   'valAmp',   v => App.setStrikeAmp(v),  v => v.toFixed(2));
+    PL.bindSlider('paramOutX',  'valOutX',  v => App.setOutputX(v),    v => v.toFixed(2));
+    PL.bindSlider('paramOutY',  'valOutY',  v => App.setOutputY(v),    v => v.toFixed(2));
+    PL.bindSlider('paramVol',   'valVol',   v => App.setVolume(v),     v => `${Math.round(v)}%`);
+
+    updateTheoryDisplay();
+    loop();
+}
+
+init();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

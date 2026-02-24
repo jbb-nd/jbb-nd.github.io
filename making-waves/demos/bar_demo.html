@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Making Waves: Vibrating Bar Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="../lib/physics-lab.js"></script>
+    <style>
+        body { background: #0a0a0c; color: #ececec; }
+
+        .panel {
+            background: #16161a;
+            border: 1px solid #2a2a2e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            border: 1px solid #2a2a2e;
+        }
+
+        .canvas-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #4d8;   /* green accent — distinguishes bar from string (blue) */
+            margin-bottom: 4px;
+        }
+
+        .tuner-box {
+            background: #000;
+            border: 1px solid #2a2a2e;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-family: monospace;
+            text-align: center;
+        }
+
+        .tuner-note  { font-size: 2rem; font-weight: bold; color: #4d8; line-height: 1; }
+        .tuner-cents { font-size: 0.75rem; color: #888; }
+        .tuner-freq  { font-size: 0.85rem; color: #fff; margin-top: 2px; }
+
+        .val-badge {
+            background: #222;
+            color: #fff;
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 1px 6px;
+            border-radius: 4px;
+            float: right;
+        }
+
+        label { font-size: 0.75rem; color: #aaa; text-transform: uppercase; }
+
+        input[type="range"] { accent-color: #4d8; width: 100%; }
+
+        h5 { font-size: 0.8rem; color: #4d8; text-transform: uppercase;
+             letter-spacing: 2px; border-bottom: 1px solid #2a2a2e;
+             padding-bottom: 6px; margin-bottom: 12px; }
+
+        #btnAudio { min-width: 120px; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid py-3 px-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0" style="font-weight:300;">
+            Making Waves &nbsp;<span style="opacity:0.4">|</span>&nbsp; Vibrating Bar
+        </h4>
+        <div class="tuner-box" style="min-width:160px;">
+            <div id="tunerNote" class="tuner-note">--</div>
+            <div id="tunerCents" class="tuner-cents">--</div>
+            <div id="tunerFreq"  class="tuner-freq">0.00 Hz</div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <!-- ── Left: canvases ─────────────────────────────────────── -->
+        <div class="col-lg-8 d-flex flex-column gap-3">
+
+            <div class="panel">
+                <div class="canvas-label">Bar — Physical View</div>
+                <canvas id="barCanvas" height="150"></canvas>
+                <div class="mt-2 text-center">
+                    <small class="text-secondary">Click or tap the bar to strike it</small>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Oscilloscope — Time Domain</div>
+                    <span id="scopeModeLabel" style="font-size:0.65rem; color:#a4f; font-family:monospace;"></span>
+                </div>
+                <canvas id="scopeCanvas" height="110"></canvas>
+            </div>
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="canvas-label mb-0">Spectrum — Frequency Domain</div>
+                    <div id="peakLabel" style="font-family:monospace; font-size:0.75rem; color:#fff;"></div>
+                </div>
+                <canvas id="specCanvas" height="140"></canvas>
+            </div>
+
+        </div>
+
+        <!-- ── Right: controls ───────────────────────────────────── -->
+        <div class="col-lg-4">
+            <div class="panel h-100 d-flex flex-column gap-3">
+
+                <!-- Audio control -->
+                <div class="d-flex gap-2">
+                    <button id="btnAudio" class="btn btn-outline-danger flex-grow-1"
+                            onclick="App.toggleAudio()">Start Audio</button>
+                    <button class="btn btn-outline-secondary flex-grow-1"
+                            onclick="App.strike()">Strike</button>
+                </div>
+
+                <!-- Bar -->
+                <div>
+                    <h5>Bar</h5>
+
+                    <label>Nodes (N) <span id="valN" class="val-badge">12</span></label>
+                    <input type="range" id="paramN" min="0.602" max="2.079" step="0.005" value="1.079">
+
+                    <label class="mt-2">Stiffness (EI) <span id="valEI" class="val-badge">0.0500</span></label>
+                    <input type="range" id="paramEI" min="-4" max="-0.7" step="0.05" value="-1.3">
+
+                    <label class="mt-2">Damping <span id="valD" class="val-badge">0.000200</span></label>
+                    <input type="range" id="paramD" min="-5" max="-2.3" step="0.05" value="-3.7">
+                </div>
+
+                <!-- Strike -->
+                <div>
+                    <h5>Strike</h5>
+
+                    <label>Position <span id="valPos" class="val-badge">0.50</span></label>
+                    <input type="range" id="paramPos" min="0.05" max="0.95" step="0.01" value="0.5">
+
+                    <label class="mt-2">Width (nodes) <span id="valWidth" class="val-badge">3.0</span></label>
+                    <input type="range" id="paramWidth" min="0.5" max="15" step="0.5" value="3">
+
+                    <label class="mt-2">Amplitude <span id="valAmp" class="val-badge">1.00</span></label>
+                    <input type="range" id="paramAmp" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+
+                <!-- Audio output -->
+                <div>
+                    <h5>Audio Output</h5>
+
+                    <label>Pick position <span id="valOut" class="val-badge">0.22</span></label>
+                    <input type="range" id="paramOut" min="0.05" max="0.95" step="0.01" value="0.22">
+
+                    <label class="mt-2">Volume <span id="valVol" class="val-badge">50%</span></label>
+                    <input type="range" id="paramVol" min="0" max="100" step="1" value="50">
+                </div>
+
+                <!-- Theoretical frequency display -->
+                <div class="mt-auto">
+                    <h5>Theory</h5>
+                    <div style="font-family:monospace; font-size:0.8rem; color:#aaa; line-height:1.8;">
+                        <div>f₁ (theory): <span id="theoryF1" style="color:#fff;">—</span></div>
+                        <div>f₂ (theory): <span id="theoryF2" style="color:#fff;">—</span></div>
+                        <div>f₃ (theory): <span id="theoryF3" style="color:#fff;">—</span></div>
+                    </div>
+                    <div id="subaudibleWarn" class="mt-1" style="font-size:0.8rem; font-family:monospace; min-height:1.2em;"></div>
+                    <div class="mt-1" style="font-size:0.7rem; color:#555;">
+                        f<sub>n</sub> ≈ (f<sub>s</sub>/2π) · √EI · (λ<sub>n</sub>/(N−1))²<br>
+                        λ = 4.730, 7.853, 10.996 &nbsp;(free-free bar)<br>
+                        Overtone ratios ≈ 1 : 2.76 : 5.40  (inharmonic)
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+'use strict';
+
+// physics-lab.js loaded in <head>.
+// This file contains only bar-specific code.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+const FFT_SIZE      = 8192;
+const RING_BUF_SIZE = 1024;  // slow-scope ring buffer entries
+const RING_RATE     = PhysicsLab.SAMPLE_RATE / (8 * 128); // ≈43 snapshots/sec
+
+// Free-free bar modal eigenvalues (solutions to cosh(λ)cos(λ)=1)
+const FREE_FREE_LAMBDAS = [4.7300, 7.8532, 10.9956];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {
+    N:          12,
+    EI:         0.05,
+    damping:    0.0002,
+    strikePos:  0.50,
+    strikeWidth: 3.0,
+    strikeAmp:  1.0,
+    outputPos:  0.22,
+    volume:     0.50,
+
+    engine:       null,
+    positions:    new Float32Array(12),
+    envelope:     new PhysicsLab.EnvelopeTracker(12, 0.9985),
+    smoothedPeak: null,
+
+    // Slow-scope ring buffer — one output-node sample per worklet snapshot
+    scopeRingBuf:   new Float32Array(RING_BUF_SIZE),
+    scopeRingPos:   0,
+    scopeRingCount: 0,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bar-specific physics: exact discrete dispersion relation for Verlet +
+// biharmonic operator on a free-free lattice.
+//
+// From the Verlet eigenvalue equation sin(ω/2) = 2√EI · sin²(q/2),
+// where q_n = λ_n / (N-1) is the mode wavenumber in lattice units:
+//
+//   f_n = (fs/π) · arcsin( 2·√EI · sin²(λ_n / (2(N-1))) )
+//
+// λ_n = FREE_FREE_LAMBDAS[n-1] are solutions to cosh(λ)cos(λ) = 1.
+//
+// Large-N limit (used before, less accurate): f_n ≈ fs·√EI·(λ_n/(N-1))² / (2π)
+// ─────────────────────────────────────────────────────────────────────────────
+function theoreticalFreq(n, N, EI, fs = PhysicsLab.SAMPLE_RATE) {
+    if (N < 2) return null;
+    const lambda = FREE_FREE_LAMBDAS[n - 1];
+    const q      = lambda / (N - 1);               // mode wavenumber (lattice units)
+    const sinSq  = Math.sin(q / 2) ** 2;
+    const arg    = 2 * Math.sqrt(EI) * sinSq;
+    if (arg >= 1.0) return null;                   // above Nyquist
+    return (fs / Math.PI) * Math.asin(arg);
+}
+
+function updateTheoryDisplay() {
+    const { N, EI } = state;
+    for (let n = 1; n <= 3; n++) {
+        const f = theoreticalFreq(n, N, EI);
+        document.getElementById(`theoryF${n}`).textContent =
+            f !== null ? `${f.toFixed(1)} Hz` : '—';
+    }
+    updateSubaudibleGuard();
+}
+
+function updateSubaudibleGuard() {
+    const f1     = theoreticalFreq(1, state.N, state.EI);
+    const warnEl = document.getElementById('subaudibleWarn');
+    if (!warnEl) return;
+
+    const isMuted      = f1 !== null && f1 < 5;
+    const isSubaudible = f1 !== null && f1 < 20;
+
+    if (isMuted) {
+        warnEl.textContent = '⚠ below 5 Hz — audio muted';
+        warnEl.style.color = '#f84';
+    } else if (isSubaudible) {
+        warnEl.textContent = '⚠ subaudible';
+        warnEl.style.color = '#fa0';
+    } else {
+        warnEl.textContent = '';
+    }
+
+    if (state.engine) {
+        const targetGain = isMuted ? 0 : state.volume;
+        state.engine.gainNode.gain.setTargetAtTime(
+            targetGain, state.engine.audioCtx.currentTime, 0.05
+        );
+    }
+}
+
+// Build marker array for PhysicsLab.Spectrum.draw()
+const MARKER_COLORS = ['#ff4', '#f84', '#4f4'];
+function theoryMarkers() {
+    return [1, 2, 3].map((n, i) => ({
+        freq:  theoreticalFreq(n, state.N, state.EI),
+        label: `f${n}`,
+        color: MARKER_COLORS[i]
+    }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bar physical view — envelope + instantaneous line (green palette)
+// Free-free bar: no fixed-end markers; output pick position indicator added.
+// ─────────────────────────────────────────────────────────────────────────────
+const barCanvas  = document.getElementById('barCanvas');
+const scopeCanvas = document.getElementById('scopeCanvas');
+const specCanvas  = document.getElementById('specCanvas');
+const barCtx     = barCanvas.getContext('2d');
+
+function drawBar(positions) {
+    const W    = barCanvas.width;
+    const H    = barCanvas.height;
+    const N    = positions.length;
+    const peak = state.envelope.peak;
+
+    barCtx.fillStyle = '#000';
+    barCtx.fillRect(0, 0, W, H);
+
+    if (N < 2) return;
+
+    let maxPeak = 0.001;
+    for (let i = 0; i < N; i++) maxPeak = Math.max(maxPeak, peak[i]);
+    const scale = (H * 0.42) / maxPeak;
+
+    // Equilibrium line
+    barCtx.strokeStyle = '#222';
+    barCtx.lineWidth   = 1;
+    barCtx.beginPath();
+    barCtx.moveTo(0, H/2);
+    barCtx.lineTo(W, H/2);
+    barCtx.stroke();
+
+    // Envelope fill (lens shape)
+    barCtx.beginPath();
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 - peak[i] * scale;
+        if (i === 0) barCtx.moveTo(x, y);
+        else         barCtx.lineTo(x, y);
+    }
+    for (let i = N - 1; i >= 0; i--) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 + peak[i] * scale;
+        barCtx.lineTo(x, y);
+    }
+    barCtx.closePath();
+    barCtx.fillStyle = 'rgba(68, 221, 136, 0.15)';
+    barCtx.fill();
+
+    // Envelope edges
+    barCtx.strokeStyle = 'rgba(68, 221, 136, 0.50)';
+    barCtx.lineWidth   = 1.5;
+    barCtx.beginPath();
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        if (i === 0) barCtx.moveTo(x, H/2 - peak[i] * scale);
+        else         barCtx.lineTo(x, H/2 - peak[i] * scale);
+    }
+    barCtx.stroke();
+    barCtx.beginPath();
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        if (i === 0) barCtx.moveTo(x, H/2 + peak[i] * scale);
+        else         barCtx.lineTo(x, H/2 + peak[i] * scale);
+    }
+    barCtx.stroke();
+
+    // Instantaneous position (bright white)
+    barCtx.strokeStyle = '#fff';
+    barCtx.lineWidth   = 1.5;
+    barCtx.beginPath();
+    for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * W;
+        const y = H/2 - positions[i] * scale;
+        if (i === 0) barCtx.moveTo(x, y);
+        else         barCtx.lineTo(x, y);
+    }
+    barCtx.stroke();
+
+    // Free-end markers (white circles — free, not pinned)
+    barCtx.strokeStyle = '#aaa';
+    barCtx.lineWidth   = 1.5;
+    barCtx.beginPath(); barCtx.arc(0, H/2, 5, 0, Math.PI*2); barCtx.stroke();
+    barCtx.beginPath(); barCtx.arc(W, H/2, 5, 0, Math.PI*2); barCtx.stroke();
+
+    // Strike position guide
+    const sx = state.strikePos * W;
+    barCtx.strokeStyle = 'rgba(255, 200, 0, 0.3)';
+    barCtx.lineWidth   = 1;
+    barCtx.setLineDash([4, 4]);
+    barCtx.beginPath(); barCtx.moveTo(sx, 0); barCtx.lineTo(sx, H);
+    barCtx.stroke();
+    barCtx.setLineDash([]);
+
+    // Output pick position
+    const ox = state.outputPos * W;
+    barCtx.strokeStyle = 'rgba(255, 120, 80, 0.4)';
+    barCtx.lineWidth   = 1;
+    barCtx.setLineDash([2, 6]);
+    barCtx.beginPath(); barCtx.moveTo(ox, 0); barCtx.lineTo(ox, H);
+    barCtx.stroke();
+    barCtx.setLineDash([]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App — bar-specific parameter management and audio lifecycle
+// ─────────────────────────────────────────────────────────────────────────────
+const App = {
+
+    async toggleAudio() {
+        const btn    = document.getElementById('btnAudio');
+        const action = PhysicsLab.AudioEngine.cycleButton(
+            state.engine?.audioCtx ?? null, btn
+        );
+        if (action === 'create') {
+            await this._initAudio();
+            this.strike();
+        }
+    },
+
+    async _initAudio() {
+        state.engine = await PhysicsLab.AudioEngine.create({
+            workletUrl:    'bar-worklet.js',
+            processorName: 'bar-processor',
+            parameterData: { stiffness: state.EI, damping: state.damping },
+            fftSize:       FFT_SIZE,
+            initialGain:   state.volume
+        });
+
+        state.engine.workletNode.port.onmessage = (e) => {
+            if (e.data.type === 'positions') {
+                state.positions = e.data.data;
+                state.envelope.update(state.positions);
+                // Push output-position node into slow-scope ring buffer
+                const posLen = state.positions.length;
+                const outIdx = posLen > 0
+                    ? Math.min(posLen - 1, Math.max(0, Math.round(state.outputPos * (posLen - 1))))
+                    : 0;
+                const sample = posLen > 0 ? (state.positions[outIdx] || 0) : 0;
+                state.scopeRingBuf[state.scopeRingPos % RING_BUF_SIZE] = sample;
+                state.scopeRingPos++;
+                state.scopeRingCount = Math.min(state.scopeRingCount + 1, RING_BUF_SIZE);
+            }
+        };
+
+        state.engine.workletNode.port.postMessage({ type: 'setN', n: state.N });
+        state.engine.workletNode.port.postMessage({ type: 'setOutput', position: state.outputPos });
+    },
+
+    strike() {
+        if (!state.engine) return;
+        state.engine.workletNode.port.postMessage({
+            type:      'strike',
+            position:  state.strikePos,
+            amplitude: state.strikeAmp,
+            width:     state.strikeWidth
+        });
+    },
+
+    setN(val) {
+        state.N = Math.round(Math.pow(10, val));
+        state.positions = new Float32Array(state.N);
+        state.envelope.resize(state.N);
+        // Clear ring buffer on N change
+        state.scopeRingBuf.fill(0);
+        state.scopeRingPos   = 0;
+        state.scopeRingCount = 0;
+        if (state.engine) {
+            state.engine.workletNode.port.postMessage({ type: 'setN', n: state.N });
+        }
+        updateTheoryDisplay();
+    },
+
+    setEI(val) {
+        // Slider is in log10 space
+        state.EI = Math.pow(10, val);
+        if (state.engine) {
+            state.engine.workletNode.parameters.get('stiffness').setTargetAtTime(
+                state.EI, state.engine.audioCtx.currentTime, 0.01
+            );
+        }
+        updateTheoryDisplay();
+    },
+
+    setDamping(val) {
+        state.damping = Math.pow(10, val);
+        if (state.engine) {
+            state.engine.workletNode.parameters.get('damping').setTargetAtTime(
+                state.damping, state.engine.audioCtx.currentTime, 0.01
+            );
+        }
+    },
+
+    setStrikePos(val)   { state.strikePos   = val; },
+    setStrikeWidth(val) { state.strikeWidth = val; },
+    setStrikeAmp(val)   { state.strikeAmp   = val; },
+
+    setOutputPos(val) {
+        state.outputPos = val;
+        if (state.engine) {
+            state.engine.workletNode.port.postMessage({ type: 'setOutput', position: val });
+        }
+    },
+
+    setVolume(val) {
+        state.volume = val / 100;
+        if (state.engine) {
+            const f1 = theoreticalFreq(1, state.N, state.EI);
+            const targetGain = (f1 !== null && f1 < 5) ? 0 : state.volume;
+            state.engine.gainNode.gain.setTargetAtTime(
+                targetGain, state.engine.audioCtx.currentTime, 0.05
+            );
+        }
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas click-to-strike
+// ─────────────────────────────────────────────────────────────────────────────
+function handleStrikeAt(clientX) {
+    const rect = barCanvas.getBoundingClientRect();
+    const pos  = Math.max(0.05, Math.min(0.95, (clientX - rect.left) / rect.width));
+    state.strikePos = pos;
+    document.getElementById('paramPos').value       = pos;
+    document.getElementById('valPos').textContent   = pos.toFixed(2);
+    App.strike();
+}
+
+barCanvas.addEventListener('click',      (e) => { if (state.engine) handleStrikeAt(e.clientX); });
+barCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (state.engine) handleStrikeAt(e.touches[0].clientX);
+}, { passive: false });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slow-scope helper — ring buffer view for subaudible frequencies
+// Returns a normalised Float32Array slice spanning ~4 periods of f1.
+// ─────────────────────────────────────────────────────────────────────────────
+function getSlowScopeView(f1) {
+    const available = state.scopeRingCount;
+    if (available < 2) return new Float32Array(2);
+
+    const cycleSamples = Math.ceil(4 * RING_RATE / Math.max(f1, 0.1));
+    const n = Math.max(4, Math.min(cycleSamples, available));
+
+    const out = new Float32Array(n);
+    const writePos = state.scopeRingPos % RING_BUF_SIZE;
+    for (let i = 0; i < n; i++) {
+        const idx = (writePos - n + i + RING_BUF_SIZE * 4) % RING_BUF_SIZE;
+        out[i] = state.scopeRingBuf[idx];
+    }
+
+    // Normalise using envelope peak at output node
+    const posLen = state.positions.length;
+    const outIdx = posLen > 0
+        ? Math.min(posLen - 1, Math.max(0, Math.round(state.outputPos * (posLen - 1))))
+        : 0;
+    const peakAmp = (posLen > 0 && state.envelope.peak[outIdx]) || 0.001;
+    for (let i = 0; i < n; i++) out[i] /= peakAmp;
+
+    return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animation loop
+// ─────────────────────────────────────────────────────────────────────────────
+const TUNER_ELS = { noteEl: 'tunerNote', centsEl: 'tunerCents', freqEl: 'tunerFreq' };
+const EMPTY_TD  = new Float32Array(FFT_SIZE);
+const EMPTY_FD  = new Float32Array(FFT_SIZE / 2);
+
+function loop() {
+    try {
+        [barCanvas, scopeCanvas, specCanvas].forEach(PhysicsLab.resizeCanvas);
+
+        drawBar(state.positions);
+
+        if (state.engine) {
+            const { analyser, timeDomainBuf, frequencyBuf, binHz } = state.engine;
+
+            // ── Oscilloscope: slow-scope ring buffer below 20 Hz ───────────────
+            const f1       = theoreticalFreq(1, state.N, state.EI);
+            const slowMode = f1 !== null && f1 < 20;
+            const modeLbl  = document.getElementById('scopeModeLabel');
+
+            if (slowMode) {
+                const slowBuf = getSlowScopeView(f1);
+                PhysicsLab.Scope.draw(scopeCanvas, slowBuf, { color: '#a4f' });
+                if (modeLbl) modeLbl.textContent = 'slow scope';
+            } else {
+                analyser.getFloatTimeDomainData(timeDomainBuf);
+                PhysicsLab.Scope.draw(scopeCanvas, timeDomainBuf, { color: '#4d8' });
+                if (modeLbl) modeLbl.textContent = '';
+            }
+
+            // ── Spectrum: auto-zoom to ~10×f₁ ─────────────────────────────────
+            const minFrac         = 20 / (FFT_SIZE / 2);
+            const displayFraction = f1 && f1 >= 0.5
+                ? Math.min(0.25, Math.max(minFrac, 10 * f1 / (PhysicsLab.SAMPLE_RATE / 2)))
+                : minFrac;
+
+            analyser.getFloatFrequencyData(frequencyBuf);
+            const rawPeak = PhysicsLab.detectPeak(frequencyBuf, binHz);
+            if (rawPeak) {
+                state.smoothedPeak = state.smoothedPeak
+                    ? state.smoothedPeak * 0.9 + rawPeak * 0.1
+                    : rawPeak;
+            }
+
+            PhysicsLab.Spectrum.draw(specCanvas, frequencyBuf, binHz, theoryMarkers(), {
+                displayFraction,
+                peakLabelId: 'peakLabel',
+                peakHz:      state.smoothedPeak
+            });
+            PhysicsLab.Tuner.update(TUNER_ELS, state.smoothedPeak);
+
+        } else {
+            PhysicsLab.Scope.draw(scopeCanvas, EMPTY_TD, { color: '#4d8' });
+            PhysicsLab.Spectrum.draw(specCanvas, EMPTY_FD, PhysicsLab.SAMPLE_RATE / FFT_SIZE, []);
+            PhysicsLab.Tuner.update(TUNER_ELS, null);
+        }
+    } catch (err) {
+        console.error('bar_demo loop error:', err);
+    }
+    requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────────────────────
+function init() {
+    const PL = PhysicsLab;
+    PL.bindSlider('paramN',     'valN',    v => App.setN(v),           v => String(Math.round(Math.pow(10, v))));
+    PL.bindSlider('paramEI',    'valEI',   v => App.setEI(v),          v => Math.pow(10, v).toFixed(4));
+    PL.bindSlider('paramD',     'valD',    v => App.setDamping(v),     v => Math.pow(10, v).toFixed(6));
+    PL.bindSlider('paramPos',   'valPos',  v => App.setStrikePos(v),   v => v.toFixed(2));
+    PL.bindSlider('paramWidth', 'valWidth',v => App.setStrikeWidth(v), v => v.toFixed(1));
+    PL.bindSlider('paramAmp',   'valAmp',  v => App.setStrikeAmp(v),   v => v.toFixed(2));
+    PL.bindSlider('paramOut',   'valOut',  v => App.setOutputPos(v),   v => v.toFixed(2));
+    PL.bindSlider('paramVol',   'valVol',  v => App.setVolume(v),      v => `${Math.round(v)}%`);
+
+    updateTheoryDisplay();
+    loop();
+}
+
+init();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
