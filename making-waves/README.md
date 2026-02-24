@@ -1,26 +1,12 @@
-# Making Waves — Overview
+# Making Waves Musical Instrument Simulations
 
-**Making Waves** is an experimental collection of interactive JavaScript simulations exploring wave mechanics and acoustics.
+This is an experimental collection of interactive JavaScript simulations exploring wave mechanics and acoustics.
 
-**Audience:** technical colleagues and students for feedback and exercises.
+1. <a href="./demos/string_demo.html" target="_blank" rel="noopener">String Demo</a> — Vibrating string under tension
+2. <a href="./demos/bar_demo.html" target="_blank" rel="noopener">Bar Demo</a> — Bending bar (chime)
+3. <a href="./demos/membrane_demo.html" target="_blank" rel="noopener">Membrane Demo</a> — 2D membrane vibration (drumhead)
+4. <a href="./demos/whistle_demo.html" target="_blank" rel="noopener">Whistle Demo</a> — Acoustic tube with fipple mouthpiece 
 
-**Current demos (in order):**
-1. String demo (string_demo)
-2. Bar demo (bar_demo)
-3. Membrane demo (membrane_demo)
-4. Whistle demo (whistle_demo)
+Click **Start Audio** to start any simulation to visualize the vibrations and hear what they sound like.
 
-**Structure**
-- Demos live in `/demos/` as standalone HTML files and open full-screen.
-- Shared library code lives in `/lib/` (`physics-lab.js`).
-- Exercises for students are in `/exercises/`.
-- Docs live at the project root and are rendered with Docsify.
-
-**Quick links**
-- [Simulations](./apps.md)
-- [User Guide](./MakingWavesDemosUsersGuide.md)
-- [Implementation Notes](./implementation.md)
-- [Exercises](./exercises/)
-
-**Feedback**
-Please open issues in the repo with steps to reproduce and browser/OS details.
+See the [User Guide](./MakingWavesDemosUsersGuide.md) for details.
