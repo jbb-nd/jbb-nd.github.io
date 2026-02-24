@@ -2,5 +2,5 @@
 <!-- - [Simulations](./demos.md) -->
 - [User Guide](./MakingWavesDemosUsersGuide.md)
 <!-- - [Implementation Notes](./implementation.md) -->
-<!-- - [Exercises](./exercises/) -->
+- [Exercises](./exercises/)
 <!-- - [Changelog](./changelog.md) -->
