@@ -5,16 +5,29 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Making Waves — Docs</title>
   <meta name="description" content="Making Waves - simulations and docs">
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=">
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    .app-header { padding: 18px 24px; border-bottom: 1px solid #eee; display:flex; align-items:center; gap:12px; }
-    .brand { font-weight:600; font-size:18px; }
+    :root{
+      --bg: #f7f9fb;
+      --card: #ffffff;
+      --muted: #6b7280;
+      --accent: #0ea5a4;
+      --text: #0f172a;
+    }
+    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); margin:0; }
+    .app-header { padding:18px 24px; display:flex; align-items:center; gap:12px; background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.4)); border-bottom:1px solid rgba(15,23,42,0.04); }
+    .brand { font-weight:700; font-size:18px; color:var(--accent); }
+    .subtitle { color:var(--muted); font-size:13px; }
+    #app { max-width:1000px; margin:28px auto; background:var(--card); box-shadow:0 6px 18px rgba(12,20,31,0.04); border-radius:10px; padding:28px; }
+    .sidebar-nav a { color:var(--text); }
+    .sidebar-nav a.active { color:var(--accent); font-weight:600; }
+    pre { background:#0b1220; color:#e6eef6; padding:12px; border-radius:8px; overflow:auto; }
   </style>
 </head>
 <body>
   <div class="app-header">
     <div class="brand">Making Waves</div>
-    <div style="color:#666">— interactive simulation demos</div>
+    <div class="subtitle">interactive wave simulation demos — experimental</div>
   </div>
   <div id="app"></div>
 
@@ -27,5 +40,6 @@
     }
   </script>
   <script src="//unpkg.com/docsify/lib/docsify.min.js"></script>
+  <script src="//unpkg.com/docsify/lib/plugins/search.min.js"></script>
 </body>
 </html>

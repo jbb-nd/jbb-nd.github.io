@@ -1,5 +1,6 @@
 - [Overview](./README.md)
 - [Simulations](./apps.md)
-- [User Guide](./guide.md)
+- [User Guide](./MakingWavesDemosUsersGuide.md)
 - [Implementation Notes](./implementation.md)
+- [Exercises](./exercises/)
 - [Changelog](./changelog.md)
