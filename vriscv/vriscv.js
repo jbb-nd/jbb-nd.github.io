@@ -1042,7 +1042,7 @@ class VRISCVSimulator {
         return { text, data, labels, inverseLabels, dataBase, lineNumbers, dataOriginUsed, firstDataOrigin };
     }
     
-    encodeInstruction(addr, instruction, labels) {
+    encodeInstruction(addr, instruction, labels, labelsWithHi = null) {
         try {
             // Remove comments (support # and //), trim, and skip empty
             const line = instruction.split('#')[0].split('//')[0].trim();
@@ -1099,6 +1099,9 @@ class VRISCVSimulator {
                         const label = loMatch[1];
                         if (!(label in labels)) throw new AssemblyError(`Undefined label: ${label}`, addr);
                         imm = labels[label] & 0xFF;
+                        if (labels[label] > 0xFF && (!labelsWithHi || !labelsWithHi.has(label))) {
+                            console.warn(`WARNING (addr 0x${addr.toString(16).padStart(4,'0')}): %lo(${label}) used alone but address 0x${labels[label].toString(16).padStart(4,'0')} has non-zero high byte -- use %hi/%lo + shift to build the full 16-bit address.`);
+                        }
                     } else if (!isNaN(parseInt(immStr, 0))) {
                         imm = parseInt(immStr, 0);
                     } else {
@@ -1300,11 +1303,17 @@ class VRISCVSimulator {
             this.lineNumbers = lineNumbers;
             
             this.memory = {};
+            const labelsWithHi = new Set();
+            for (const instruction of Object.values(text)) {
+                for (const match of instruction.matchAll(/%hi\s*\(\s*(\w+)\s*\)/g)) {
+                    labelsWithHi.add(match[1]);
+                }
+            }
             
             // Assemble text segment
             for (const addr of Object.keys(text).map(a => parseInt(a)).sort((a, b) => a - b)) {
                 try {
-                    const code = this.encodeInstruction(addr, text[addr], labels);
+                    const code = this.encodeInstruction(addr, text[addr], labels, labelsWithHi);
                     this.memory[addr] = code;
                 } catch (error) {
                     if (error instanceof AssemblyError) {
@@ -1844,11 +1853,6 @@ class VRISCVSimulator {
             } else {
                 // console.log('Line number out of range:', currentSourceLine, 'total lines:', lines.length);
             }
-        } else {
-            // No highlighting - just show plain source code
-            // console.log('Not highlighting - conditions not met');
-            const sourceCode = this.getSourceCode();
-            sourceDisplay.innerHTML = this.escapeHtml(sourceCode);
         }
     }
     
@@ -1862,11 +1866,6 @@ class VRISCVSimulator {
         }
         
         assembledDisplay.innerHTML = assembledLines.join('\n');
-        
-        // Clear highlighting in source code
-        const sourceDisplay = document.getElementById('sourceDisplay');
-        const sourceCode = this.getSourceCode();
-        sourceDisplay.innerHTML = this.escapeHtml(sourceCode);
     }
     
     // System call output methods
