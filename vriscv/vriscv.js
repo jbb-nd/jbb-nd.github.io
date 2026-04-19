@@ -80,8 +80,8 @@ class TrapVectorTable {
     }
 
     handleInvalidInstruction(registers, memory, currentPc) {
-        // Invalid instruction trap - advance PC for consistency
-        return { state: ExecutionState.STOPPED, message: 'Invalid instruction (trap 2)', pc: currentPc + 1 };
+        // Invalid instruction trap - keep PC at the faulting address.
+        return { state: ExecutionState.STOPPED, message: `Illegal fetch at 0x${currentPc.toString(16).padStart(4, '0')} (trap 2)`, pc: currentPc };
     }
 
     handleSystemCall(registers, memory, currentPc) {
@@ -857,11 +857,13 @@ class VRISCVSimulator {
                 }
                 continue;
             }
-            if (line.includes(':')) {
-                const [label, rest] = line.split(':', 2);
+            const labelWithContentMatch = line.match(/^\s*([A-Za-z_]\w*):\s*(.*)$/);
+            if (labelWithContentMatch) {
+                const label = labelWithContentMatch[1];
+                const rest = labelWithContentMatch[2];
                 if (currentSegment === 'text') {
-                    labels[label.trim()] = address;
-                    inverseLabels[address] = label.trim() + ': ';
+                    labels[label] = address;
+                    inverseLabels[address] = label + ': ';
                     line = rest.trim();
                 } else if (currentSegment === 'data') {
                     // Assign any pending label to current data address in correct buffer
@@ -872,7 +874,7 @@ class VRISCVSimulator {
                             dataPostOriginLabels[pendingDataLabel] = dataAddress;
                         }
                     }
-                    pendingDataLabel = label.trim();
+                    pendingDataLabel = label;
                     line = rest.trim();
                 }
             }
@@ -1167,8 +1169,8 @@ class VRISCVSimulator {
                     const m = args && args.match(/\s*([0-9]+)/);
                     if (!m) throw new AssemblyError('trap must be of the form trap imm', addr);
                     const cause = parseInt(m[1], 0);
-                    if (isNaN(cause) || cause < 0 || cause > 15) throw new AssemblyError(`Invalid trap cause: ${m[1]}. Must be 0-15.`, addr);
-                    code = (opcode << 12) | (cause << 8) | 0 | 0;
+                    if (isNaN(cause) || cause < 0 || cause > 0xFFF) throw new AssemblyError(`Invalid trap cause: ${m[1]}. Must be 0-4095.`, addr);
+                    code = (opcode << 12) | (cause & 0xFFF);
                     break;
                 }
                 default:
@@ -1208,16 +1210,11 @@ class VRISCVSimulator {
         // Get all text addresses
         const textAddresses = new Set(Object.keys(text).map(a => parseInt(a)));
         
-        // Get all data addresses (actual addresses in memory, matching Python logic)
+        // Data keys are already final addresses after parseAsm merge.
         const dataAddresses = new Set();
         const dataAddressMap = {};  // final_addr -> content
         for (const addr of Object.keys(data).map(a => parseInt(a))) {
-            let finalAddr;
-            if (dataOriginUsed && typeof firstDataOrigin !== 'undefined' && addr >= firstDataOrigin) {
-                finalAddr = addr; // post-origin: absolute
-            } else {
-                finalAddr = dataBase + addr; // pre-origin: relative
-            }
+            const finalAddr = addr;
             dataAddresses.add(finalAddr);
             dataAddressMap[finalAddr] = data[addr];
         }
@@ -1396,9 +1393,14 @@ class VRISCVSimulator {
         
         try {
             const instrAddr = this.pc;
-            if (!(instrAddr in this.memory)) {
-                this.log(`Program counter ${instrAddr.toString(16)} not in memory`, true);
-                this.execution_state = ExecutionState.STOPPED;
+            // Strict fetch legality: only .text addresses are executable.
+            if (!(instrAddr in this.text)) {
+                const trapResult = this.trapVectorTable.handleTrap(2, this.regs, this.memory, instrAddr);
+                this.pc = trapResult.pc;
+                this.execution_state = trapResult.state;
+                this.log(trapResult.message, true);
+                this.updateDisplay();
+                this.highlightCurrentLine();
                 this.updateControls();
                 return;
             }
@@ -1556,8 +1558,8 @@ class VRISCVSimulator {
                 break;
                 
             case 0xE: // trap
-                // Extract the trap cause from bits 11:8
-                const trapCause = (instr >> 8) & 0xF;
+                // Extract the trap cause from bits 11:0
+                const trapCause = instr & 0xFFF;
                 const trapResult = this.trapVectorTable.handleTrap(trapCause, this.regs, this.memory, pc);
                 execution_state = trapResult.state;
                 effect = trapResult.message;
