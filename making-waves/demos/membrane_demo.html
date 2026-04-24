@@ -100,7 +100,7 @@
                     </div>
                     <button id="btnViewToggle" onclick="App.toggleView()"
                             class="btn btn-outline-secondary btn-sm"
-                            style="font-size:0.65rem; padding:2px 8px; color:#aaa;">⬜ colour map</button>
+                            style="font-size:0.65rem; padding:2px 8px; color:#aaa;">⬜ color map</button>
                 </div>
                 <canvas id="memCanvas" height="280"></canvas>
                 <div class="mt-2 text-center">
@@ -361,10 +361,10 @@ function theoryMarkers() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Membrane colour map — ImageData approach for performance.
+// Membrane color map — ImageData approach for performance.
 // Per-pixel fillRect would be ~100× slower at typical canvas sizes.
 //
-// Colour convention:
+// Color convention:
 //   z > 0 (positive / toward viewer) → amber gradient ( 0,0,0 → 250,160,0 )
 //   z = 0 (equilibrium)              → black (#000)
 //   z < 0 (negative / away)          → blue  gradient ( 0,0,0 → 64,128,255 )
@@ -411,7 +411,7 @@ function drawMembrane(snapshot, N) {
             const idx = (py * W + px) * 4;
 
             if (v >= 0) {
-                // Positive → amber (R=255, G=180, B=0); gamma so small amplitudes show colour
+                // Positive → amber (R=255, G=180, B=0); gamma so small amplitudes show color
                 const g = Math.pow(v, 0.4);
                 pixels[idx]     = (g * 255) | 0;
                 pixels[idx + 1] = (g * 180) | 0;
@@ -478,7 +478,7 @@ function drawMembrane(snapshot, N) {
 // Rows are drawn back-to-front (i=0 first) so nearer rows overwrite farther ones.
 // Column wires are drawn every ~N/12 columns at 30% alpha to add depth cues
 // without cluttering the horizontal profile lines.
-// Lines are coloured by the average displacement of that row/column (amber/blue).
+// Lines are colored by the average displacement of that row/column (amber/blue).
 // ─────────────────────────────────────────────────────────────────────────────
 function drawMembraneIsometric(snapshot, N) {
     const W = memCanvas.width;
@@ -514,7 +514,7 @@ function drawMembraneIsometric(snapshot, N) {
         oy + i * iStepY - (zv / maxAmp) * zScale
     ];
 
-    // Map normalised z value to CSS colour string — gamma 0.4 for vibrancy
+    // Map normalised z value to CSS color string — gamma 0.4 for vibrancy
     const zColor = (zv) => {
         const v = zv / maxAmp;
         if (v >= 0) {
@@ -542,12 +542,12 @@ function drawMembraneIsometric(snapshot, N) {
     memCtx.stroke();
 
     // ── Horizontal rows — back to front (i = 0, 1, … N-1) ───────────────
-    // Each row is drawn as a single path coloured by its peak-|z| node
-    // (not its average) so modes with mixed sign still show vivid colour.
+    // Each row is drawn as a single path colored by its peak-|z| node
+    // (not its average) so modes with mixed sign still show vivid color.
     for (let i = 0; i <= Nm1; i++) {
         const isBoundary = (i === 0 || i === Nm1);
 
-        // Find peak z in this row for colour
+        // Find peak z in this row for color
         let pkZ = 0;
         if (!isBoundary) {
             for (let j = 1; j < Nm1; j++) {
@@ -781,7 +781,7 @@ const App = {
             btn.textContent    = '🏔 isometric';
             legend.style.display = 'none';
         } else {
-            btn.textContent    = '⬜ colour map';
+            btn.textContent    = '⬜ color map';
             legend.style.display = '';
         }
         // Reset ImageData cache so it's rebuilt at the new size if needed
