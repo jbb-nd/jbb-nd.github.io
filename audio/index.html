@@ -59,6 +59,39 @@
             font-size: 0.9rem;
         }
 
+        .mw-tuner-card {
+            padding: 1rem;
+        }
+
+        .mw-tuner-label {
+            font-weight: 600;
+        }
+
+        .mw-tuner-value {
+            font-size: clamp(1.6rem, 4.2vw, 2.6rem);
+            font-weight: 600;
+        }
+
+        .mw-tuner-note {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 600;
+        }
+
+        .mw-tuner-accidental {
+            font-size: clamp(1.2rem, 3.6vw, 1.6rem);
+        }
+
+        @media (max-width: 576px) {
+            .mw-tuner-card {
+                padding: 0.65rem;
+            }
+
+            #tunerContainer .row {
+                --bs-gutter-y: 0.5rem;
+                --bs-gutter-x: 0.75rem;
+            }
+        }
+
         .mw-logo {
             width: 180px;
             height: auto;
@@ -97,25 +130,24 @@
                 </h2>
                 <div id="collapseTuner" class="accordion-collapse collapse" aria-labelledby="headingTuner">
                     <div class="accordion-body" id="tunerContainer">
-                        <div class="row g-3">
+                        <div class="row g-2">
                             <div class="col-12 col-md-6">
-                                <div class="p-3 border rounded-3 bg-light">
-                                    <div class="fw-semibold">Peak Frequency</div>
-                                    <div class="display-6">
+                                <div class="mw-tuner-card border rounded-3 bg-light">
+                                    <div class="mw-tuner-label">Peak Frequency</div>
+                                    <div class="mw-tuner-value">
                                         <span id="peakFrequency">0</span> Hz
                                     </div>
                                     <div class="mw-muted">Period: <span id="peakPeriod">0</span> ms</div>
                                 </div>
                             </div>
                             <div class="col-12 col-md-6">
-                                <div class="p-3 border rounded-3 bg-light text-center">
-                                    <div class="fw-semibold">Note</div>
+                                <div class="mw-tuner-card border rounded-3 bg-light text-center">
+                                    <div class="mw-tuner-label">Note</div>
                                     <div class="d-flex align-items-center justify-content-center gap-3 mt-2">
-                                        <span id="flat" class="fs-4"></span>
-                                        <span id="noteName" class="display-5">--</span>
-                                        <span id="sharp" class="fs-4"></span>
+                                        <span id="flat" class="mw-tuner-accidental"></span>
+                                        <span id="noteName" class="mw-tuner-note">--</span>
+                                        <span id="sharp" class="mw-tuner-accidental"></span>
                                     </div>
-                                    <div class="mw-legend mw-muted mt-2">Flat or sharp indicators update every 0.5s.</div>
                                 </div>
                             </div>
                         </div>
