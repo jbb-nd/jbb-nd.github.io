@@ -72,6 +72,16 @@
             font-weight: 600;
         }
 
+        .mw-tuner-period {
+            font-size: clamp(1.8rem, 4.8vw, 2.7rem);
+            font-weight: 600;
+        }
+
+        .mw-tuner-secondary {
+            font-size: clamp(1.05rem, 3vw, 1.45rem);
+            color: #4f4c48;
+        }
+
         .mw-tuner-note {
             font-size: clamp(1.7rem, 4.6vw, 2.8rem);
             font-weight: 600;
@@ -79,6 +89,69 @@
 
         .mw-tuner-accidental {
             font-size: clamp(1.2rem, 3.6vw, 1.6rem);
+        }
+
+        .mw-tuner-indicator-group {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.18rem;
+            width: 2.6em;
+        }
+
+        .mw-tuner-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            opacity: 0.15;
+            transition: opacity 0.15s ease;
+        }
+
+        .mw-tuner-dot-flat {
+            background: #c8513a;
+        }
+
+        .mw-tuner-dot-sharp {
+            background: #2f8f5b;
+        }
+
+        .mw-tuner-dot-active {
+            opacity: 0.7;
+        }
+
+        .mw-tuner-dot-strong {
+            opacity: 1;
+        }
+
+        .mw-confidence-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 0.4rem;
+            vertical-align: middle;
+            background: #b6b1a8;
+            opacity: 0.6;
+            transition: background 0.2s ease, opacity 0.2s ease;
+        }
+
+        .mw-confidence-low {
+            background: #c6b092;
+            opacity: 0.8;
+        }
+
+        .mw-confidence-mid {
+            background: #d18b2c;
+            opacity: 0.9;
+        }
+
+        .mw-confidence-high {
+            background: #2f8f5b;
+            opacity: 1;
+        }
+
+        .mw-confidence-off {
+            opacity: 0.2;
         }
 
         @media (max-width: 576px) {
@@ -133,20 +206,31 @@
                         <div class="row g-2">
                             <div class="col-6 col-md-6">
                                 <div class="mw-tuner-card border rounded-3 bg-light">
-                                    <div class="mw-tuner-label">Peak Frequency</div>
-                                    <div class="mw-tuner-value">
-                                        <span id="peakFrequency">0</span> Hz
+                                    <div class="mw-tuner-label">Period</div>
+                                    <div class="mw-tuner-period">
+                                        <span id="peakPeriod">0</span> ms
                                     </div>
-                                    <div class="mw-muted">Period: <span id="peakPeriod">0</span> ms</div>
+                                    <div class="mw-tuner-secondary">Frequency: <span id="peakFrequency">0</span> Hz</div>
                                 </div>
                             </div>
                             <div class="col-6 col-md-6">
                                 <div class="mw-tuner-card border rounded-3 bg-light text-center">
-                                    <div class="mw-tuner-label">Note</div>
+                                    <div class="mw-tuner-label">
+                                        Note
+                                        <span id="tunerConfidence" class="mw-confidence-dot mw-confidence-off" aria-hidden="true"></span>
+                                    </div>
                                     <div class="d-flex align-items-center justify-content-center gap-3 mt-2">
-                                        <span id="flat" class="mw-tuner-accidental"></span>
+                                        <span id="flatDots" class="mw-tuner-accidental mw-tuner-indicator-group">
+                                            <span class="mw-tuner-dot mw-tuner-dot-flat"></span>
+                                            <span class="mw-tuner-dot mw-tuner-dot-flat"></span>
+                                            <span class="mw-tuner-dot mw-tuner-dot-flat"></span>
+                                        </span>
                                         <span id="noteName" class="mw-tuner-note">--</span>
-                                        <span id="sharp" class="mw-tuner-accidental"></span>
+                                        <span id="sharpDots" class="mw-tuner-accidental mw-tuner-indicator-group">
+                                            <span class="mw-tuner-dot mw-tuner-dot-sharp"></span>
+                                            <span class="mw-tuner-dot mw-tuner-dot-sharp"></span>
+                                            <span class="mw-tuner-dot mw-tuner-dot-sharp"></span>
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -216,15 +300,26 @@
         const peakFrequencyDisplay = document.getElementById('peakFrequency');
         const peakPeriodDisplay = document.getElementById('peakPeriod');
         const noteNameDisplay = document.getElementById('noteName');
-        const flatDisplay = document.getElementById('flat');
-        const sharpDisplay = document.getElementById('sharp');
+        const flatDots = document.getElementById('flatDots');
+        const sharpDots = document.getElementById('sharpDots');
         const oscilloscopeCanvas = document.getElementById('oscilloscope');
         const spectrumCanvas = document.getElementById('spectrumAnalyzer');
+        const tunerConfidenceDot = document.getElementById('tunerConfidence');
         const xZoomSlider = document.getElementById('xZoom');
         const yZoomSlider = document.getElementById('yZoom');
         const startButton = document.getElementById('startButton');
         const resetButton = document.getElementById('resetButton');
         const cursorButton = document.getElementById('cursorButton');
+
+        const tunerConfig = {
+            mode: 'yin',
+            minFrequency: 60,
+            maxFrequency: 4000,
+            yinThreshold: 0.15,
+            pitchUpdateIntervalMs: 150,
+            smoothingWindow: 5,
+            emaAlpha: 0.2
+        };
 
         let audioContext;
         let isRunning = false;
@@ -327,11 +422,16 @@
             peakFrequencyDisplay.textContent = '0';
             peakPeriodDisplay.textContent = '0';
             noteNameDisplay.textContent = '--';
-            flatDisplay.textContent = '';
-            sharpDisplay.textContent = '';
+            updateAccidentalIndicators(null);
 
-            updateCharts.frequencyBuffer = [];
+            updateCharts.tunerBuffer = [];
             updateCharts.lastUpdateTime = null;
+            updateCharts.lastPitchTime = null;
+            updateCharts.lastPitchFrequency = null;
+            updateCharts.emaFrequency = null;
+            updateCharts.lastConfidence = null;
+
+            setConfidenceDot(null);
         }
 
         function initializeCharts() {
@@ -519,37 +619,29 @@
                 spectrumChart.data.datasets[0].data = Array.from(frequencyData);
                 spectrumChart.update();
 
-                let maxAmplitude = -Infinity;
-                let maxIndex = 0;
-                for (let i = 1; i < frequencyData.length - 1; i++) {
-                    if (frequencyData[i] > maxAmplitude) {
-                        maxAmplitude = frequencyData[i];
-                        maxIndex = i;
+                if (!updateCharts.lastPitchTime) {
+                    updateCharts.lastPitchTime = performance.now();
+                }
+
+                const pitchTime = performance.now();
+                if (pitchTime - updateCharts.lastPitchTime >= tunerConfig.pitchUpdateIntervalMs) {
+                    let detectedPitch = null;
+
+                    if (tunerConfig.mode === 'peak') {
+                        detectedPitch = {
+                            frequency: computePeakFrequency(frequencyData, audioContext.sampleRate),
+                            confidence: 1
+                        };
+                    } else {
+                        detectedPitch = computeYinPitch(timeDomainData, audioContext.sampleRate, tunerConfig);
                     }
+
+                    updateCharts.lastPitchFrequency = updateSmoothedFrequency(detectedPitch?.frequency ?? null);
+                    updateCharts.lastConfidence = detectedPitch?.confidence ?? null;
+                    updateCharts.lastPitchTime = pitchTime;
                 }
 
-                let refinedIndex = maxIndex;
-                if (maxIndex > 0 && maxIndex < frequencyData.length - 1) {
-                    const x0 = frequencyData[maxIndex - 1];
-                    const x1 = frequencyData[maxIndex];
-                    const x2 = frequencyData[maxIndex + 1];
-                    refinedIndex = maxIndex + (x2 - x0) / (2 * (2 * x1 - x2 - x0));
-                }
-
-                const nyquist = audioContext.sampleRate / 2;
-                const peakFrequency = (refinedIndex / frequencyData.length) * nyquist;
-
-                if (!updateCharts.frequencyBuffer) {
-                    updateCharts.frequencyBuffer = [];
-                }
-                const frequencyBuffer = updateCharts.frequencyBuffer;
-
-                frequencyBuffer.push(peakFrequency);
-                if (frequencyBuffer.length > 10) {
-                    frequencyBuffer.shift();
-                }
-
-                const smoothedFrequency = frequencyBuffer.reduce((a, b) => a + b, 0) / frequencyBuffer.length;
+                const smoothedFrequency = updateCharts.lastPitchFrequency || 0;
                 const peakPeriod = (smoothedFrequency > 0) ? (1000 / smoothedFrequency) : 0;
 
                 if (!updateCharts.lastUpdateTime) {
@@ -560,25 +652,17 @@
                     peakFrequencyDisplay.textContent = smoothedFrequency.toFixed(0);
                     peakPeriodDisplay.textContent = peakPeriod.toFixed(2);
 
-                    const noteInfo = identifyNote(smoothedFrequency);
-                    const noteName = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][noteInfo.noteIndex];
+                    if (smoothedFrequency > 0) {
+                        const noteInfo = identifyNote(smoothedFrequency);
+                        const noteName = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][noteInfo.noteIndex];
 
-                    noteNameDisplay.textContent = noteName;
-                    if (noteInfo.centsOff < -25) {
-                        flatDisplay.textContent = '- -';
-                        sharpDisplay.textContent = '';
-                    } else if (noteInfo.centsOff < -10) {
-                        flatDisplay.textContent = '-';
-                        sharpDisplay.textContent = '';
-                    } else if (noteInfo.centsOff < 10) {
-                        flatDisplay.textContent = '';
-                        sharpDisplay.textContent = '';
-                    } else if (noteInfo.centsOff < 25) {
-                        flatDisplay.textContent = '';
-                        sharpDisplay.textContent = '+';
+                        noteNameDisplay.textContent = noteName;
+                        setConfidenceDot(updateCharts.lastConfidence);
+                        updateAccidentalIndicators(noteInfo.centsOff);
                     } else {
-                        flatDisplay.textContent = '';
-                        sharpDisplay.textContent = '+ +';
+                        noteNameDisplay.textContent = '--';
+                        updateAccidentalIndicators(null);
+                        setConfidenceDot(null);
                     }
 
                     updateCharts.lastUpdateTime = currentTime;
@@ -603,6 +687,184 @@
             const centsOff = Math.round(1200 * Math.log2(frequency / closestNoteFrequency));
 
             return { noteIndex, octave, centsOff };
+        }
+
+        function computePeakFrequency(spectrumData, sampleRate) {
+            let maxAmplitude = -Infinity;
+            let maxIndex = 0;
+            for (let i = 1; i < spectrumData.length - 1; i++) {
+                if (spectrumData[i] > maxAmplitude) {
+                    maxAmplitude = spectrumData[i];
+                    maxIndex = i;
+                }
+            }
+
+            let refinedIndex = maxIndex;
+            if (maxIndex > 0 && maxIndex < spectrumData.length - 1) {
+                const x0 = spectrumData[maxIndex - 1];
+                const x1 = spectrumData[maxIndex];
+                const x2 = spectrumData[maxIndex + 1];
+                refinedIndex = maxIndex + (x2 - x0) / (2 * (2 * x1 - x2 - x0));
+            }
+
+            const nyquist = sampleRate / 2;
+            return (refinedIndex / spectrumData.length) * nyquist;
+        }
+
+        function computeYinPitch(samples, sampleRate, config) {
+            const maxTau = Math.min(
+                Math.floor(sampleRate / config.minFrequency),
+                Math.floor(samples.length / 2)
+            );
+            const minTau = Math.max(2, Math.floor(sampleRate / config.maxFrequency));
+
+            if (maxTau <= minTau) {
+                return null;
+            }
+
+            const yinBuffer = new Float32Array(maxTau + 1);
+            for (let tau = 1; tau <= maxTau; tau++) {
+                let sum = 0;
+                for (let i = 0; i < samples.length - tau; i++) {
+                    const delta = samples[i] - samples[i + tau];
+                    sum += delta * delta;
+                }
+                yinBuffer[tau] = sum;
+            }
+
+            yinBuffer[0] = 1;
+            let runningSum = 0;
+            for (let tau = 1; tau <= maxTau; tau++) {
+                runningSum += yinBuffer[tau];
+                yinBuffer[tau] = runningSum > 0 ? (yinBuffer[tau] * tau) / runningSum : 1;
+            }
+
+            let tauEstimate = null;
+            for (let tau = minTau; tau <= maxTau; tau++) {
+                if (yinBuffer[tau] < config.yinThreshold) {
+                    while (tau + 1 <= maxTau && yinBuffer[tau + 1] < yinBuffer[tau]) {
+                        tau++;
+                    }
+                    tauEstimate = tau;
+                    break;
+                }
+            }
+
+            if (!tauEstimate) {
+                return null;
+            }
+
+            let betterTau = tauEstimate;
+            if (tauEstimate > 1 && tauEstimate < maxTau) {
+                const s0 = yinBuffer[tauEstimate - 1];
+                const s1 = yinBuffer[tauEstimate];
+                const s2 = yinBuffer[tauEstimate + 1];
+                const denom = (2 * s1 - s2 - s0);
+                if (denom !== 0) {
+                    betterTau = tauEstimate + (s2 - s0) / (2 * denom);
+                }
+            }
+
+            const frequency = sampleRate / betterTau;
+            if (frequency < config.minFrequency || frequency > config.maxFrequency) {
+                return null;
+            }
+
+            const confidence = Math.max(0, Math.min(1, 1 - yinBuffer[Math.round(tauEstimate)]));
+            return { frequency, confidence };
+        }
+
+        function updateSmoothedFrequency(frequency) {
+            if (!Number.isFinite(frequency) || frequency <= 0) {
+                return updateCharts.lastPitchFrequency || 0;
+            }
+
+            if (!updateCharts.tunerBuffer) {
+                updateCharts.tunerBuffer = [];
+            }
+
+            const buffer = updateCharts.tunerBuffer;
+            buffer.push(frequency);
+            if (buffer.length > tunerConfig.smoothingWindow) {
+                buffer.shift();
+            }
+
+            const sorted = [...buffer].sort((a, b) => a - b);
+            const median = sorted[Math.floor(sorted.length / 2)];
+            if (updateCharts.emaFrequency === null || updateCharts.emaFrequency === undefined) {
+                updateCharts.emaFrequency = median;
+            } else {
+                updateCharts.emaFrequency = tunerConfig.emaAlpha * median + (1 - tunerConfig.emaAlpha) * updateCharts.emaFrequency;
+            }
+
+            return updateCharts.emaFrequency;
+        }
+
+        function updateAccidentalIndicators(centsOff) {
+            const flatIndicators = flatDots ? Array.from(flatDots.querySelectorAll('.mw-tuner-dot')) : [];
+            const sharpIndicators = sharpDots ? Array.from(sharpDots.querySelectorAll('.mw-tuner-dot')) : [];
+
+            for (const dot of flatIndicators) {
+                dot.classList.remove('mw-tuner-dot-active', 'mw-tuner-dot-strong');
+            }
+            for (const dot of sharpIndicators) {
+                dot.classList.remove('mw-tuner-dot-active', 'mw-tuner-dot-strong');
+            }
+
+            if (!Number.isFinite(centsOff)) {
+                return;
+            }
+
+            const absCents = Math.abs(centsOff);
+            let dotCount = 0;
+            if (absCents > 40) {
+                dotCount = 3;
+            } else if (absCents > 25) {
+                dotCount = 2;
+            } else if (absCents > 10) {
+                dotCount = 1;
+            }
+
+            if (dotCount === 0) {
+                return;
+            }
+
+            const dotsToFill = centsOff < 0
+                ? [flatIndicators[2], flatIndicators[1], flatIndicators[0]]
+                : [sharpIndicators[0], sharpIndicators[1], sharpIndicators[2]];
+
+            for (let i = 0; i < dotCount; i++) {
+                const dot = dotsToFill[i];
+                if (!dot) {
+                    continue;
+                }
+                if (dotCount >= 3 || i < dotCount - 1) {
+                    dot.classList.add('mw-tuner-dot-strong');
+                } else {
+                    dot.classList.add('mw-tuner-dot-active');
+                }
+            }
+        }
+
+        function setConfidenceDot(confidence) {
+            if (!tunerConfidenceDot) {
+                return;
+            }
+
+            tunerConfidenceDot.classList.remove('mw-confidence-low', 'mw-confidence-mid', 'mw-confidence-high', 'mw-confidence-off');
+
+            if (!Number.isFinite(confidence)) {
+                tunerConfidenceDot.classList.add('mw-confidence-off');
+                return;
+            }
+
+            if (confidence >= 0.8) {
+                tunerConfidenceDot.classList.add('mw-confidence-high');
+            } else if (confidence >= 0.6) {
+                tunerConfidenceDot.classList.add('mw-confidence-mid');
+            } else {
+                tunerConfidenceDot.classList.add('mw-confidence-low');
+            }
         }
 
         xZoomSlider.addEventListener('input', () => {
