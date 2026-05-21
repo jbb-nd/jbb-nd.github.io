@@ -209,7 +209,7 @@
                         <div class="row g-2">
                             <div class="col-6 col-md-6">
                                 <div class="mw-tuner-card border rounded-3 bg-light">
-                                    <div class="mw-tuner-label">Peak Frequency</div>
+                                    <div id="freqMethodLabel" class="mw-tuner-label">Peak Frequency</div>
                                     <div class="mw-tuner-value">
                                         <span id="peakFrequency">0</span> Hz
                                     </div>
@@ -236,6 +236,13 @@
                                         </span>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-end mt-2 gap-2">
+                            <small class="mw-muted">Pitch:</small>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Pitch detection method">
+                                <button type="button" id="btnPeak" class="btn btn-sm btn-secondary">Peak</button>
+                                <button type="button" id="btnYin" class="btn btn-sm btn-outline-secondary">YIN</button>
                             </div>
                         </div>
                     </div>
@@ -313,9 +320,12 @@
         const startButton = document.getElementById('startButton');
         const resetButton = document.getElementById('resetButton');
         const cursorButton = document.getElementById('cursorButton');
+        const freqMethodLabel = document.getElementById('freqMethodLabel');
+        const btnPeak = document.getElementById('btnPeak');
+        const btnYin = document.getElementById('btnYin');
 
         const tunerConfig = {
-            mode: 'yin',
+            mode: 'peak',
             minFrequency: 60,
             maxFrequency: 4000,
             yinThreshold: 0.15,
@@ -854,6 +864,12 @@
                 return;
             }
 
+            if (tunerConfig.mode === 'peak') {
+                tunerConfidenceDot.style.display = 'none';
+                return;
+            }
+
+            tunerConfidenceDot.style.display = '';
             tunerConfidenceDot.classList.remove('mw-confidence-low', 'mw-confidence-mid', 'mw-confidence-high', 'mw-confidence-off');
 
             if (!Number.isFinite(confidence)) {
@@ -869,6 +885,31 @@
                 tunerConfidenceDot.classList.add('mw-confidence-low');
             }
         }
+
+        function setTunerMode(mode) {
+            tunerConfig.mode = mode;
+            if (mode === 'peak') {
+                freqMethodLabel.textContent = 'Peak Frequency';
+                btnPeak.classList.remove('btn-outline-secondary');
+                btnPeak.classList.add('btn-secondary');
+                btnYin.classList.remove('btn-secondary');
+                btnYin.classList.add('btn-outline-secondary');
+            } else {
+                freqMethodLabel.textContent = 'YIN Frequency';
+                btnYin.classList.remove('btn-outline-secondary');
+                btnYin.classList.add('btn-secondary');
+                btnPeak.classList.remove('btn-secondary');
+                btnPeak.classList.add('btn-outline-secondary');
+            }
+            updateCharts.tunerBuffer = [];
+            updateCharts.emaFrequency = null;
+            setConfidenceDot(null);
+        }
+
+        btnPeak.addEventListener('click', () => setTunerMode('peak'));
+        btnYin.addEventListener('click', () => setTunerMode('yin'));
+
+        setTunerMode('peak');
 
         xZoomSlider.addEventListener('input', () => {
             const maxVisibleMilliseconds = 10 ** (-xZoomSlider.value);
